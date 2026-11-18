@@ -59,28 +59,22 @@ SUBDESIGN acceler
 	)
 VARIABLE
 
---	R75: RAM акселератора 8-битная (rev esb4: dp8, общий адрес)
-	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);
+	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);	-- c303 esb4: 8x256
 
 	DO[7..0]	: DFFE;
 	MDO[15..0]	: DFFE;
 
-	PRF_CMD		: DFFE;
-	ED_CMD		: DFFE;
-	CB_CMD		: DFFE;
-	ID_CMD		: DFFE;
-	IN_OUT_CMD	: DFFE;
-
-	ED_PAT		: NODE;
-	RET_PAT		: NODE;
-	IOC_PAT		: NODE;
+	PRF_CMD		: DFFE;		-- c303 lc_F11_6
+	ED_CMD		: DFFE;		-- c303 lc_F5_6
+	IN_OUT_CMD	: DFFE;		-- c303 lc_F2_4
 
 	CORRECT_1F	: NODE;
 
-	ACC_BLK		: DFF;
+	ACC_BLK		: DFFE;		-- c303 lc_F8_3 (полярность инвертирована к ACC_BLK донора)
 
-	RETI		: DFFE;
-	RETN		: DFFE;
+	RETI		: DFFE;		-- c303 lc_F5_7
+
+	FN_GATE		: NODE;		-- c303 lc_F11_8
 
 	AA[15..0]	: DFFE;
 
@@ -90,12 +84,11 @@ VARIABLE
 
 	START_ACC	: NODE;
 	ACC_END		: DFFE;
-	FN_ACC[2..0]: DFFE;
+	FN_ACC[1..0]: DFFE;	-- c303 lc_F11_1/lc_F11_4 (выбор функции AND/OR/XOR/B)
 	ACC_MODE[3..0]	: DFFE;
 
 	MD[7..0]	: LCELL;
 	XMD[7..0]	: DFF;
-	XMDH[7..0]	: DFF;
 
 	ACC_DIR[7..0]	: LCELL;
 
@@ -105,8 +98,6 @@ VARIABLE
 	ACC_GO_1	: NODE;
 
 	RAM_WR		: NODE;
-
-	STATE_EI	: DFFE;
 
 --	HDDR[7..0]	: DFFE;
 
@@ -132,63 +123,41 @@ BEGIN
 
 	ACC_ON		= ACC_DIR0;
 
-	/M1M		= DFF(!/M1,CLK_Z80,/RESET,);
+	/M1M		= DFF(!/M1,CLK_Z80,/RESET,);	-- c303 lc_F2_2
+
+-- === opcode-snoop c303: регистры на /MR, ena = /M1M (синхро-/M1 на CLK_Z80) ===
 
 	PRF_CMD.clk		= /MR;
 	PRF_CMD.ena		= /M1M;
-	PRF_CMD.d		= (DI[] == B"11XX1XX1") &
-							   ((DI[] == B"XX00X01X") or  -- CB
-					  			(DI[] == B"XX01X10X") or  -- DD
-					  			(DI[] == B"XX10X10X") or  -- ED
-					  			(DI[] == B"XX11X10X"));	  -- FD
+-- кремниевая форма (lc_F11_6): префиксы CB/DD/ED/FD
+-- F11_2 = DI6 & DI3 & DI0;  F11_3 = (!DI4&!DI2&DI1&!DI5)|(DI4&DI2&!DI1)|(DI2&!DI1&DI5)
+	PRF_CMD.d		= LCELL((!DI4 & !DI2 & DI1 & !DI5) or (DI4 & DI2 & !DI1) or (DI2 & !DI1 & DI5)) &
+					  DI7 & LCELL(DI6 & DI3 & DI0);
 
---	=== interrupt === 0 - disable; 1 - enable
-
-	STATE_EI.clk	= /MR;
-	STATE_EI.ena	= /M1M & !PRF_CMD & (DI[] == B"1111X011");
-	STATE_EI.d		= DI3;
-
---	RETI comand
-
---	opcode decodes as two cascade halves, .d completes the pattern
---	ED_PAT  = (DI3 & DI6 & !DI4) & CASCADE(DI2 & !DI1 & DI0)   ; rev lc_F22_4
---	RET_PAT = (ED & DI2 & DI0 & !DI1) & CASCADE(DI6 & DI3 & !DI4) ; rev lc_F22_2
---	IOC_PAT = (DI4 & !DI2 & DI6) & CASCADE(!PRF & DI0 & DI1)   ; rev lc_F32_2
-	ED_PAT		= LCELL((DI3 & DI6 & !DI4) & CASCADE(DI2 & !DI1 & DI0));
-	RET_PAT		= LCELL((ED_CMD & DI2 & DI0 & !DI1) & CASCADE(DI6 & DI3 & !DI4));
-	IOC_PAT		= LCELL((DI4 & !DI2 & DI6) & CASCADE(!PRF_CMD & DI0 & DI1));
+--	RETI comand (ED-префикс → байт 0x4D); RETN (0x45) у c303 нет
 
 	ED_CMD.clk		= /MR;
 	ED_CMD.ena		= /M1M;
-	ED_CMD.d		= ED_PAT & DI7 & DI5;
+-- кремниевая форма (lc_F5_6): F5_1 & DI3 & F5_2 = 0xED
+	ED_CMD.d		= LCELL(DI7 & DI6 & DI5 & !DI4) & DI3 & LCELL(DI2 & !DI1 & DI0);
 
 	RETI.clk		= /MR;
 	RETI.ena		= /M1M;
-	RETI.d			= RET_PAT & !DI7 & !DI5;
-
---	"1" on the RETI triger is the end of interupt sycle.
-
-	RETN.clk		= /MR;
-	RETN.ena		= /M1M;
-	RETN.d			= ED_CMD & (DI[] == H"45");
+-- кремниевая форма (lc_F5_7): F5_5=ED&DI2&DI0&!DI1; & !DI7 & F5_3(DI6&!DI4&DI3&!DI5) = 0x4D
+	RETI.d			= ED_CMD & DI2 & DI0 & !DI1 & !DI7 & LCELL(DI6 & !DI4 & DI3 & !DI5);
 
 --	The end of NMI sycle.
 
+-- c303 lc_F8_3: тактируется пином /M1, сброс по !IDXV (ACC_MODE3);
+-- встроенный DFF на CLK_Z80 = lc_F5_4 — донорский эквивалент !ACC_BLK
 	ACC_BLK.clk		= /M1;
-	ACC_BLK.d		= DFF(((/IO & ACC_BLK) or (!ACC_BLK & RETI)),CLK_Z80,,);
-	ACC_BLK.prn		= /RESET & ACC_MODE3;
-
-	CB_CMD.clk		= /MR;
-	ID_CMD.clk		= /MR;
-	CB_CMD.ena		= /M1M;
-	ID_CMD.ena		= /M1M;
-
-	CB_CMD.d		= (DI[] == H"CB");
-	ID_CMD.d		= (DI[] == B"11X11101");
+	ACC_BLK.d		= !DFF((RETI & ACC_BLK) # (/IO & !ACC_BLK),CLK_Z80,,);
+	ACC_BLK.clrn	= /RESET & ACC_MODE3;
 
 	IN_OUT_CMD.clk	= /MR;
 	IN_OUT_CMD.ena	= /M1M;
-	IN_OUT_CMD.d	= IOC_PAT & DI7 & !DI5;   -- D3/DB & !PRF_CMD
+-- кремниевая форма (lc_F2_4): F2_8(DI7&DI6&!DI5&DI4) & !DI2 & F2_7(!PRF&DI0&DI1) = 1101x011
+	IN_OUT_CMD.d	= LCELL(DI7 & DI6 & !DI5 & DI4) & !DI2 & LCELL(!PRF_CMD & DI0 & DI1);
 	IN_OUT_CMD.clrn	= /IO;
 
 	CORRECT_1F		= LCELL(IN_OUT_CMD & (DO[] == H"1F") & !/MR & !/RD);
@@ -247,7 +216,7 @@ BEGIN
 
 --	== accelerator dir ==
 
-	START_ACC = LCELL(LCELL(/MR or !/M1 or !/RF or !ACC_BLK) or (!ACC_DIR0 or MC_TYPE));
+	START_ACC = LCELL(LCELL(/MR or !/M1 or !/RF or ACC_BLK) or (!ACC_DIR0 or MC_TYPE));
 
 	DOUBLE_CAS= LCELL(ACC_DIR6 & !START_ACC);
 
@@ -294,8 +263,7 @@ BEGIN
 
 	GLISS_R.clk	= CLK42;
 	CASE ACC_DIR1 IS
-		-- D==FF decode as 3-cell cascade (rev lc_D21_3 form)
-		WHEN 0 => GLISS_R = LCELL((DI5 & DI7) & CASCADE((DI4 & DI3 & DI6) & CASCADE(DI2 & DI1 & DI0)));
+		WHEN 0 => GLISS_R = LCELL(DI[] == H"FF");
 		WHEN 1 => GLISS_R = LCELL(RAM.q[7..4] == H"F") & LCELL(RAM.q[3..0] == H"F");
 	END CASE;
 	GLISSER	= GLISS_R;
@@ -331,12 +299,13 @@ BEGIN
 
 --	== accelerator functions ==
 
+-- кремниевая форма: два триггера F11_1/F11_4, гейт F11_8 = !PRF & !DI6 & DI7;
+-- третий бит (FN_ACC2 = !DI5) в кремнии c303 отсутствует
 	FN_ACC[].clk	= /MR;
 	FN_ACC[].ena	= /M1M;
-	FN_ACC[].d		= LCELL(DI7 & !DI6 & !PRF_CMD) & !(DI[5..3]);
-
-	XMDH[].clk		= !CLK42;
-	XMDH[]			= MDI[15..8];
+	FN_GATE			= LCELL(DI7 & !DI6 & !PRF_CMD);
+	FN_ACC0.d		= FN_GATE & !DI3;	-- lc_F11_1
+	FN_ACC1.d		= FN_GATE & !DI4;	-- lc_F11_4
 
 	XMD[].clk		= !CLK42;
 	CASE FN_ACC[1..0] IS
@@ -358,11 +327,10 @@ BEGIN
 	ACC_TIME		= LCELL((!ACC_END or !DFFE(ACC_END,CLK42,,,(CT1 & CT2))));
 
 --	RAM_WR			= DFF((!/RD & (!ACC_GO & CT0) & ACC_TIME),CLK42,,);
-	RAM_WR			= DFF((!/RD & !ACC_GO & CT0),CLK42,,);
+	RAM_WR = DFF((!/RD & !ACC_GO & CT0),CLK42,,); -- actual original scratch write capture
 
 	RAM.wren 		= RAM_WR;
---	R75: data 8 бит без дублирования (rev esb4.data = XMD-сигналы)
-	RAM.data[] 		= XMD[];
+	RAM.data[] 		= XMD[];	-- c303 esb4.data = operand-ALU byte (XMD на !CLK42)
 --	RAM.wraddress[] = ACC_CNT[];
 	RAM.wraddress[] = RAM_ADR[];
 	RAM.wrclock		= CLK42;

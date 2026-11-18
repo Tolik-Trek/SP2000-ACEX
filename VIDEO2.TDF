@@ -22,10 +22,6 @@ SUBDESIGN video2
 
 	BLANK		: OUTPUT;
 
---	R78: «видеосинхра прошла» — 3 фронта HSYNC после включения
---	(rev lc_C20_7; входит в состав драйвера /RESET, rev lc_C20_3)
-	LN_RDY		: OUTPUT;
-
 	START_UP	: INPUT;
 	COPY_SINC_H	: INPUT;
 	COPY_SINC_V	: INPUT;
@@ -89,6 +85,7 @@ VARIABLE
 
 	CT[5..0]	: DFFE;
 	CTH[5..0]	: DFFE;
+	H_PHASE_PREFIX, V_PHASE_PREFIX : LCELL; -- separate existing raw counter-enable prefixes
 	CTV[8..0]	: DFFE;
 	CTF[6..0]	: DFF;
 
@@ -108,8 +105,9 @@ VARIABLE
 	INTTX		: NODE;
 
 	VLA[17..0]	: DFF;
-	VLA_MUX[10..0] : LCELL; -- исходные терминальные функции адреса VRAM
-	VLA_NEXT[17..0] : NODE;
+
+	VLA_NEXT[17..0] : NODE; % позитивные каскад-концы VLA %
+
 --	SVA[17..0]	: NODE;
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
@@ -194,8 +192,7 @@ VARIABLE
 	MS_POINT2	: NODE;
 	MS_PNT		: NODE;
 
---	R75: 6-го EAB для спрайта мыши в ранней версии нет (rev: 5 EAB)
---	MS_DAT		: LPM_RAM_DP WITH (LPM_WIDTH=16,LPM_WIDTHAD=8,LPM_FILE="MOUSE.MIF");
+	MS_DAT		: LPM_RAM_DP WITH (LPM_WIDTH=16,LPM_WIDTHAD=8,LPM_FILE="MOUSE.MIF");
 
 	SCR_ENA		: DFFE;
 	V_WR_[3..0]	: LCELL;
@@ -209,14 +206,6 @@ VARIABLE
 
 	F_WR		: NODE;
 
---	R78: posedge-копии sync-фронтов (rev lc_C27_8 / lc_A5_8):
---	сырые !clk-импульсы COPY_SINC_* пересинхронизированы на CLK42,
---	именно копии используются для clrn/prn счётчиков и ena CT[5..3].
-	SINC_H42	: NODE;
-	SINC_V42	: NODE;
---	R78: построчный сдвиг VCC по фронту HSYNC (rev lc_C20_4/lc_C20_2/lc_C20_7)
-	LN_ST[2..0]	: NODE;
-
 BEGIN
 
 	DEFAULTS
@@ -225,6 +214,9 @@ BEGIN
 		V_WE.d		= VCC; WR_COL.d		= VCC; WR_PIC.d		= VCC;
 		V_WET[].d	= VCC;
 	END DEFAULTS;
+
+	-- Full author address word selected by the VCM CASE below.
+	VLA[].d = VLA_NEXT[];
 
 	ZX_COLOR[] = ZX_COL[];
 
@@ -236,6 +228,8 @@ BEGIN
 		WHEN 1 => MS_X[] = (!MOUSE_X[9..0]);
 	END CASE;
 
+
+
 	MS_Y[].clk	= !CTH5;
 	CASE LCELL(CTV8 & !CTV5 & CTV4) IS
 		WHEN 0 => MS_Y[] = MS_Y[] + 1;
@@ -244,24 +238,22 @@ BEGIN
 
 	MS_PNT = DFF(((MS_X[] == B"100000XXXX") & (MS_Y[] == B"100000XXXX")),CLK42,,);
 
---	R75: MS_DAT отсутствует — порты закомментированы
---	MS_DAT.wren 		= GND;
---	MS_DAT.data[] 		= GND;
---	MS_DAT.wraddress[]	= GND;
---	MS_DAT.wrclock		= CLK42;
---	MS_DAT.wrclken		= GND;
---	MS_DAT.rden			= VCC;
---	MS_DAT.rdaddress[]	= (MS_Y[3..0],MS_X[3..0]);
---	MS_DAT.rdclock		= CLK42;
---	MS_DAT.rdclken		= VCC;
+	MS_DAT.wren 		= GND;
+	MS_DAT.data[] 		= GND;
+	MS_DAT.wraddress[]	= GND;
+	MS_DAT.wrclock		= CLK42;
+	MS_DAT.wrclken		= GND;
+	MS_DAT.rden			= VCC;
+	MS_DAT.rdaddress[]	= (MS_Y[3..0],MS_X[3..0]);
+	MS_DAT.rdclock		= CLK42;
+	MS_DAT.rdclken		= VCC;
 
 	IF MOUSE == "NO" GENERATE
 		MS_POINT	= GND;
 		MS_POINT2	= GND;
 	ELSE GENERATE
---	R75: dead-path самовыражение (как в rev-референсе раннего поколения)
-		MS_POINT	= DFF((MS_PNT & MS_PNT),CLK42,,);
-		MS_POINT2	= DFF((MS_PNT & MS_PNT),CLK42,,);
+		MS_POINT	= DFF((MS_PNT & MS_DAT.q0),CLK42,,);
+		MS_POINT2	= DFF((MS_PNT & MS_DAT.q1),CLK42,,);
 	END GENERATE;
 
 --	=== Sinc-counts GENERATOR ============================================
@@ -274,31 +266,18 @@ BEGIN
 --	CTV[].clrn = !COPY_SINC_V or VER_PLACE;
 --	CTV[].prn  = !COPY_SINC_V or !VER_PLACE;
 
---	R78: clrn/prn счётчиков — от posedge-копий sync-фронтов (rev !lc_C27_8/!lc_A5_8)
-	SINC_H42	= DFF(COPY_SINC_H,CLK42,,);
-	SINC_V42	= DFF(COPY_SINC_V,CLK42,,);
-
-	CT[5].clrn = VCC; -- Raw phase FF has no asynchronous sync clear.
-
-	-- Native horizontal sync reload = 46 (2Eh), proven over all 64 counter states.
-	CTH[0].clrn		= !SINC_H42;
-	CTH[1].prn 		= !SINC_H42;
-	CTH[2].prn 		= !SINC_H42;
-	CTH[3].prn 		= !SINC_H42;
-	CTH[4].clrn 		= !SINC_H42;
-	CTH[5].prn		= !SINC_H42;
-
-	-- Native vertical sync reload = 280 (118h), proven over all 512 counter states.
-	CTV[2..0].clrn = !SINC_V42;
-	CTV[4..3].prn = !SINC_V42;
-	CTV[7..5].clrn = !SINC_V42;
-	CTV[8].prn = !SINC_V42;
-
---	R78: построчный сдвиг (rev lc_C20_4/lc_C20_2/lc_C20_7, ena=lc_C27_8)
-	LN_ST0			= DFFE(VCC,CLK42,,,SINC_H42);
-	LN_ST1			= DFFE(LN_ST0,CLK42,,,SINC_H42);
-	LN_ST2			= DFFE(LN_ST1,CLK42,,,SINC_H42);
-	LN_RDY			= LN_ST2;
+	CT[5].clrn = VCC; -- raw phase5 has no asynchronous sync reset
+	-- Raw encoded banks exhaustively decoded as reload46/280 and wrap55/319.
+	CTH[0].clrn = !COPY_SINC_H;
+	CTH[1].prn = !COPY_SINC_H;
+	CTH[2].prn = !COPY_SINC_H;
+	CTH[3].prn = !COPY_SINC_H;
+	CTH[4].clrn = !COPY_SINC_H;
+	CTH[5].prn = !COPY_SINC_H;
+	CTV[2..0].clrn = !COPY_SINC_V;
+	CTV[4..3].prn = !COPY_SINC_V;
+	CTV[7..5].clrn = !COPY_SINC_V;
+	CTV[8].prn = !COPY_SINC_V;
 
 	CT[5..0].clk	= CLK42;
 	CTH[5..0].clk	= CLK42;
@@ -316,9 +295,8 @@ BEGIN
 		WHEN 7 => CT[2..0] = 0;
 	END CASE;
 								  -- for remove sinc jitter
---	R78: rev lc_A1_5 = DFFE((!CT4 & lc_C27_8) or (CT0 & CT2))
-	CT[5..3].ena	= DFF(((CT0 & CT2) or (SINC_H42 & !CT4)),CLK42,,);
---	CT[5..3].ena	= DFF((CT0 & CT2),CLK42,,);
+--	CT[5..3].ena	= DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,);
+	CT[5..3].ena = DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,); -- surviving author jitter alternative
 	CT[5..3]		= CT[5..3]+1;
 %
 	CASE CT[4..3] IS
@@ -328,8 +306,10 @@ BEGIN
 		WHEN 3 => CT[5..3]	= CT[5..3]+1;
 	END CASE;
 %
-	CTH[].ena		= DFF(((CT[5..2] == 15) & CT0),CLK42,,);
-	CTV[].ena		= DFF(((CT[5..2] == 15) & CT0 & (CTH[] == 48)),CLK42,,);
+	H_PHASE_PREFIX = CT4 & CT0;
+	V_PHASE_PREFIX = CT4 & CT0;
+	CTH[].ena		= DFF((H_PHASE_PREFIX & CT5 & CT3 & CT2),CLK42,,);
+	CTV[].ena		= DFF((V_PHASE_PREFIX & CT5 & CT3 & CT2 & (CTH[] == 48)),CLK42,,);
 
 	IF CTH[] == 55 THEN
 		CTH[]	= GND;
@@ -411,7 +391,7 @@ IF MODE == "SPRINTER" GENERATE
 --	BLANK	= DFF((BORD & MODE03 & MODE02),WR_PIC,,);
 --	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
-	BORD = DFF((MODE0[7..4] == 15),WR_PIC,,);
+	BORD	= DFF((MODE0[7..4] == 15),WR_PIC,,);
 	BLANK	= DFF(((BORD & MODE03 & MODE02) or DIR_PORT4),WR_PIC,,);
 	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
@@ -428,7 +408,6 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN B"100" => VCM[2..0].d = 2; -- 010
 		WHEN B"101" => VCM[2..0].d = 0; -- 000
 	END CASE;
-
 
 	CASE VCM[1..0] IS
 		WHEN 0 =>
@@ -465,37 +444,6 @@ IF MODE == "SPRINTER" GENERATE
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
 	END CASE;
-
-	-- Тот же четырёхвходовый словный mux в положительной форме.
-	VLA[0].d = VLA_NEXT[0];
-	VLA[1].d = VLA_NEXT[1];
-	VLA_MUX[0] = VLA_NEXT[2];
-	VLA[2].d = VLA_MUX[0];
-	VLA_MUX[1] = VLA_NEXT[3];
-	VLA[3].d = VLA_MUX[1];
-	VLA_MUX[2] = VLA_NEXT[4];
-	VLA[4].d = VLA_MUX[2];
-	VLA[5].d = VLA_NEXT[5];
-	VLA[6].d = VLA_NEXT[6];
-	VLA[7].d = VLA_NEXT[7];
-	VLA[8].d = VLA_NEXT[8];
-	VLA[9].d = VLA_NEXT[9];
-	VLA_MUX[3] = VLA_NEXT[10];
-	VLA[10].d = VLA_MUX[3];
-	VLA_MUX[4] = VLA_NEXT[11];
-	VLA[11].d = VLA_MUX[4];
-	VLA_MUX[5] = VLA_NEXT[12];
-	VLA[12].d = VLA_MUX[5];
-	VLA_MUX[6] = VLA_NEXT[13];
-	VLA[13].d = VLA_MUX[6];
-	VLA_MUX[7] = VLA_NEXT[14];
-	VLA[14].d = VLA_MUX[7];
-	VLA_MUX[8] = VLA_NEXT[15];
-	VLA[15].d = VLA_MUX[8];
-	VLA_MUX[9] = VLA_NEXT[16];
-	VLA[16].d = VLA_MUX[9];
-	VLA_MUX[10] = VLA_NEXT[17];
-	VLA[17].d = VLA_MUX[10];
 
 --	choose V-RAM komplect
 
