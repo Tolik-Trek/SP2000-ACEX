@@ -19,8 +19,12 @@
 --  their respective licensors.  No other licenses, including any licenses
 --  needed under any third party's intellectual property, are provided herein.
 --
-CHIP BASE_210
+CHIP BASE_211
 BEGIN
+	-- Existing LWR_COL registers share one LAB clock route; no added logic.
+	"|video2:SVIDEO|BORD" : LOCATION = LC1_F20;
+	"|video2:SVIDEO|INTTX" : LOCATION = LC3_F20;
+	"|video2:SVIDEO|BLANK_CAPTURE" : LOCATION = LC4_F20;
 	|CASXE1 :	LOCATION = LC8_B36;
 	|CASXE0 :	LOCATION = LC7_B36;
 	|CASX_3 :	LOCATION = LC6_B36;

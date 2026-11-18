@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_210
+SUBDESIGN BASE_211
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -254,8 +254,8 @@ BEGIN
 	-- start_up from SOFT_RESET
 	/RESET	= TRI(GND,!DFF((KEYS.kb_reset & SOFT_RESET),CLK42,,));
 
-	SOFT_RES[].prn	= DFF((!DECODE.BLK_R or /WR or !(DECODE.PAGE[7..0] == H"A0")),CLK42,,);
---	вариант 211/212: DFF((!DFF(DECODE.BLK_R,CLK42,,) or /WR or !(DECODE.PAGE[7..4] == H"A")),CLK42,,!/MR)
+--	SOFT_RES[].prn	= DFF((!DECODE.BLK_R or /WR or !(DECODE.PAGE[7..0] == H"A0")),CLK42,,);
+	SOFT_RES[].prn	= DFF((!DFF(DECODE.BLK_R,CLK42,,) or /WR or !(DECODE.PAGE[7..4] == H"A")),CLK42,,!/MR);
 
 	SOFT_RES[].clk	= !CT4;
 	CASE SOFT_RES[] IS
@@ -739,9 +739,10 @@ END GENERATE;
 	DECODE./RF		= /RF;
 	DECODE./M1		= /M1;
 
-	/WAIT			= TRI(DECODE./WAIT,LCELL(!(DECODE./WAIT & DFF(DECODE./WAIT,CLK42,,))));
---	вариант 211: OPNDRN(DECODE./WAIT)  (p18=TRI(GND,!cone))
---	вариант 212: TRI(DECODE./WAIT,LCELL(!(DECODE./WAIT)))
+	/WAIT			= OPNDRN(DECODE./WAIT);
+
+--	/WAIT			= TRI(DECODE./WAIT,LCELL(!(DECODE./WAIT & DFF(DECODE./WAIT,CLK42,,))));
+--	/WAIT			= TRI(DECODE./WAIT,LCELL(!(DECODE./WAIT)));
 
 	DECODE.TEST_R	= TFF(KEYS.kb_ctrl,KEYS.kb_f12,,);
 
@@ -907,7 +908,7 @@ END GENERATE;
 --	====== COVOX ==========
 
 
---	== CBL/COVOX 8-bit variant (R75-observed for BASE_210 family) ==
+--	== CBL/COVOX 8-bit variant (R75-observed for BASE_211 family) ==
 --	Control register at port 89 has only 2 bits: D7 (mode gate) and D0 (rate select).
 --	Write address = inverted A[15..8] gated by mode; no write counter (CBL_WA absent).
 --	Read side: 8-bit counter + 3-bit sequencer FSM + 4-bit rate sequencer.

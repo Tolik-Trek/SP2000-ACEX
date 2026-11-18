@@ -99,6 +99,7 @@ VARIABLE
 	E_WRD		: NODE;
 
 	BLANK		: NODE;
+	BLANK_CAPTURE : DFF; -- Existing BLANK register, named for skew-safe placement.
 	BORD		: NODE;
 --	INTT_T		: NODE;
 	INTTX		: NODE;
@@ -259,9 +260,9 @@ BEGIN
 
 	CT[5].clrn		= !COPY_SINC_H;
 
-	-- BASE_210: set CTH to 49 (31h), per all-state raw-counter proof.
-	CTH[0].prn 		= !COPY_SINC_H;
-	CTH[1].clrn 		= !COPY_SINC_H;
+	-- set CTH to 50 (32h)
+	CTH[0].clrn		= !COPY_SINC_H;
+	CTH[1].prn 		= !COPY_SINC_H;
 	CTH[2].clrn		= !COPY_SINC_H;
 	CTH[3].clrn		= !COPY_SINC_H;
 	CTH[4].prn 		= !COPY_SINC_H;
@@ -293,7 +294,7 @@ BEGIN
 	END CASE;
 								  -- for remove sinc jitter
 --	CT[5..3].ena	= DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,);
-	CT[5..3].ena	= DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,);
+	CT[5..3].ena	= DFF((CT0 & CT2),CLK42,,);
 	CT[5..3]		= CT[5..3]+1;
 %
 	CASE CT[4..3] IS
@@ -386,9 +387,13 @@ IF MODE == "SPRINTER" GENERATE
 --	BLANK	= DFF((BORD & MODE03 & MODE02),WR_PIC,,);
 --	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
-	BORD	= DFF((MODE0[7..4] == 15),WR_PIC,,);
-	BLANK	= DFF(((BORD & MODE03 & MODE02) or DIR_PORT4),WR_PIC,,);
-	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
+	BORD	= DFF((MODE0[7..4] == 15),LWR_COL,,);
+	BLANK_CAPTURE.d = ((BORD & MODE03 & MODE02) or DIR_PORT4);
+	BLANK_CAPTURE.clk = LWR_COL;
+	BLANK_CAPTURE.clrn = VCC;
+	BLANK_CAPTURE.prn = VCC;
+	BLANK = BLANK_CAPTURE.q;
+	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),LWR_COL,,);
 
 	INTT	= DFF(!(INTTX & (CTV[2..0] == 7)),CT5,,);
 

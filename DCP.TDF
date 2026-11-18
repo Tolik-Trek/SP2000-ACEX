@@ -135,7 +135,6 @@ VARIABLE
 --	DOS_ON_		: NODE;
 
 	MC_RQ		: NODE;
-	BLOCK_READ_STAGE3 : DFF; -- Third memory-request history sample; BASE_210 reverse.
 	MC_END		: DFFE;
 	MC_BEGIN	: DFFE;
 	MC_TYPE		: DFFE;
@@ -267,7 +266,7 @@ BEGIN
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
-	CLK_Z80	= DFF((!CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
+	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
 --	==============================================================
 	CLK21	= DFF((!CT0 xor CT2),CLK42,,);
@@ -565,13 +564,9 @@ CAS		\__/  | \__/|\__/
 
 --	when BLK_R = 1 => Other Devices stay Active!
 
-	BLOCK_READ_STAGE3.d = DFF(DFF(MC_RQ,CLK42,,!/MR),CLK42,,!/MR);
-	BLOCK_READ_STAGE3.clk = CLK42;
-	BLOCK_READ_STAGE3.clrn = VCC;
-	BLOCK_READ_STAGE3.prn = !/MR;
 	BLK_R = DFF(  (LCELL((MEM.q7 & MEM.q6 & RAM) or
 				   (MEM.q7 & LCELL(A14 & A15 & SC4))) &
-				   !BLOCK_READ_STAGE3.q),!CLK42,!/MR,);
+				   !DFF(DFF(MC_RQ,CLK42,,!/MR),CLK42,,!/MR)),!CLK42,!/MR,);
 
 	/CASH = DFF((MEM.q[7..4] == 15),!CLK42,BLK_R,);
 --	/CASH = VCC;
