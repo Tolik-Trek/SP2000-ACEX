@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_204
+SUBDESIGN SP2000_3a9933193ed12546
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -233,8 +233,8 @@ VARIABLE
 	AY/PORTS[7..0]	: LCELL;
 
 	V_WRXX[3..0]: LCELL;
-	V_WRX[3..0]	: LCELL;
---	V_WRX[3..0]	: NODE;
+--	V_WRX[3..0]	: LCELL; -- 36e serial OE buffer alternative
+	V_WRX[3..0]	: NODE; -- 3a99 OE LCELLs are parallel full masks V_WEY
 
 	KEY_IO		: NODE;
 
@@ -260,6 +260,7 @@ VARIABLE
 	IO_WRITE_ACTIVE : DFF;
 
 	SOFT_COUNT_CLEAR_N : DFF;
+	SOFT_PAGE_A0_PREFIX : LCELL; -- existing raw soft-reset page-type CASCADE, separate from HDD_ENA
 
 BEGIN
 
@@ -271,7 +272,8 @@ BEGIN
 
 --	SOFT_RES[].prn	= DFF((!DECODE.BLK_R or /WR or !(DECODE.PAGE[7..0] == H"A0")),CLK42,,);
 	SOFT_COUNT_CLEAR_N.clk = CLK42;
-	SOFT_COUNT_CLEAR_N.d = !DECODE.BLK_R or /WR or !(DECODE.PAGE[7..0] == H"A0");
+	SOFT_PAGE_A0_PREFIX = DECODE.PAGE[7..5] == B"101";
+	SOFT_COUNT_CLEAR_N.d = !DECODE.BLK_R or /WR or !SOFT_PAGE_A0_PREFIX or !(DECODE.PAGE[4..0] == 0);
 	SOFT_RES[].prn = SOFT_COUNT_CLEAR_N;
 
 	SOFT_RES[].clk	= CTH2; -- raw203 !lc_A2_3, отдельный raster clock
@@ -387,14 +389,13 @@ BEGIN
 
 	D_OUT = !(/IO or /RD or LCELL((DCPP[7..4] == 0) or (DCPP[7..4] == 3))) or RD_RAM;
 
--- BASE204: direct and delayed active write taps converge before VD OE.
--- Four measured chains: mask -> delayed tap -> tap OR -> terminal fanout.
-	V_WRXX[] = !SVIDEO.V_WEN[] or !SVIDEO.V_WR[];
+-- 3a99: parallel registered-VLA masks independently drive /V_WR and VD OE.
+	V_WRXX[] = !SVIDEO.V_WEN[]; -- surviving unused author alternative, pruned when not consumed
 
-  	V_WRX3 = V_WRXX3;
-  	V_WRX2 = V_WRXX2;
-  	V_WRX1 = V_WRXX1;
-  	V_WRX0 = V_WRXX0;
+  	V_WRX3 = !SVIDEO.V_WEN3;
+  	V_WRX2 = !SVIDEO.V_WEN2;
+  	V_WRX1 = !SVIDEO.V_WEN1;
+  	V_WRX0 = !SVIDEO.V_WEN0;
 
 	FOR i IN 0 TO 7 GENERATE
 		D[i]	= TRI(DD[i],D_OUT);
@@ -563,7 +564,7 @@ END GENERATE;
 
 --					ISA_A[1..0] = DECODE.PAGE[1..0]; -- ISA select
 	--				ISA_A[1..0] = (DECODE.PAGE2,DECODE.PAGE1); -- later ISA select
-				ISA_A[1..0] = DECODE.PAGE[1..0]; -- early author alternative
+				ISA_A[1..0] = (DECODE.PAGE2,DECODE.PAGE1); -- actual 36e ISA page selection
 	END CASE;
 
 	RD_RAM	= !(DECODE.CS_RAM or /RD or DECODE.BLK_R);

@@ -3,7 +3,7 @@ WIDTH = 16;
 ADDRESS_RADIX = HEX;
 DATA_RADIX = HEX;
 
--- Logical author bus order; 203 physical lanes recovered per MIF_LANES005.json.
+-- Logical author bus order; 36e actual native RAM port/held/data lane projection.
 CONTENT BEGIN
 00 : 1040;
 01 : 1000;
@@ -54,9 +54,9 @@ CONTENT BEGIN
 2E : 7160;
 2F : 7164;
 30 : 7000;
-31 : 7000;
-32 : 7000;
-33 : 7000;
+31 : 7001;
+32 : 7002;
+33 : 7003;
 34 : 1000;
 35 : 1000;
 36 : 1000;

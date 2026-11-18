@@ -19,7 +19,7 @@
 --  their respective licensors.  No other licenses, including any licenses
 --  needed under any third party's intellectual property, are provided herein.
 --
-CHIP BASE_204
+CHIP SP2000_3a9933193ed12546
 BEGIN
 	|CASXE1 :	LOCATION = LC8_B36;
 	|CASXE0 :	LOCATION = LC7_B36;
@@ -41,10 +41,10 @@ BEGIN
 	"|video2:SVIDEO|V_CSX0" :	LOCATION = LC5_F3;
 	"|dcp:DECODE|WR_AWGX" :	LOCATION = LC2_A15;
 	"|video2:SVIDEO|V_WEMM" :	LOCATION = LC4_F17;
-	"|video2:SVIDEO|V_WEY2" :	LOCATION = LC2_F19;
-	"|video2:SVIDEO|V_WEY3" :	LOCATION = LC2_F14;
-	"|video2:SVIDEO|V_WEY1" :	LOCATION = LC2_F16;
-	"|video2:SVIDEO|V_WEY0" :	LOCATION = LC2_F17;
+	"|video2:SVIDEO|V_WEY2" :	LOCATION = LC1_F19;
+	"|video2:SVIDEO|V_WEY3" :	LOCATION = LC1_F14;
+	"|video2:SVIDEO|V_WEY1" :	LOCATION = LC1_F16;
+	"|video2:SVIDEO|V_WEY0" :	LOCATION = LC1_F17;
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_0" :	LOCATION = EAB_D;
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_1" :	LOCATION = EAB_D;
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_2" :	LOCATION = EAB_D;
@@ -53,9 +53,6 @@ BEGIN
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_5" :	LOCATION = EAB_D;
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_6" :	LOCATION = EAB_D;
 	"|acceler:ACC|lpm_ram_dp:RAM|altdpram:sram|segment0_7" :	LOCATION = EAB_D;
-	|V_WRX3 :	LOCATION = LC1_F14;
-	|V_WRX1 :	LOCATION = LC1_F16;
-	|V_WRX0 :	LOCATION = LC1_F17;
 	"|video2:SVIDEO|V_WR_1" :	LOCATION = LC8_F16;
 	"|video2:SVIDEO|V_WR_0" :	LOCATION = LC8_F17;
 	"|ay:AY3|lpm_ram_dq:90|altram:sram|segment0_0" :	LOCATION = EAB_E;
@@ -101,7 +98,6 @@ BEGIN
 	"|lpm_ram_dp:CBL|altdpram:sram|segment0_13" :	LOCATION = EAB_A;
 	"|lpm_ram_dp:CBL|altdpram:sram|segment0_14" :	LOCATION = EAB_A;
 	"|lpm_ram_dp:CBL|altdpram:sram|segment0_15" :	LOCATION = EAB_A;
-	|V_WRX2 :	LOCATION = LC1_F19;
 	"|video2:SVIDEO|V_WR_2" :	LOCATION = LC8_F19;
 	"|video2:SVIDEO|V_WR_3" :	LOCATION = LC8_F14;
 	"|dcp:DECODE|:285" :	LOCATION = LC2_A32;
@@ -256,10 +252,6 @@ BEGIN
 	|A0 :	INPUT_PIN = 26;
 	|MD13 :	BIDIR_PIN = 189;
 	DEVICE = EP1K30QC208-3;
-	"|VIDEO_PG" : LOCATION = LAB_C27;
-	"|BLK_MR" : LOCATION = LAB_C27;
-	"|/WE_OUT" : LOCATION = LAB_C27;
-	"|DRAM_WRITE_ACTIVE" : LOCATION = LAB_C27;
 END;
 
 DEFAULT_DEVICES
@@ -288,7 +280,7 @@ END;
 
 IGNORED_ASSIGNMENTS
 BEGIN
-	FIT_IGNORE_TIMING = OFF;
+	FIT_IGNORE_TIMING = ON;
 	DEMOTE_SPECIFIC_LCELL_ASSIGNMENTS_TO_LAB_ASSIGNMENTS = OFF;
 	IGNORE_LOCAL_ROUTING_ASSIGNMENTS = OFF;
 	IGNORE_DEVICE_ASSIGNMENTS = OFF;

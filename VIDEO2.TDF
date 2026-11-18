@@ -195,7 +195,7 @@ VARIABLE
 
 	SCR_ENA		: DFFE;
 	V_WR_[3..0]	: LCELL;
-	V_WEY[3..0]	: LCELL;
+	V_WEY[3..0]	: LCELL; -- 3a99 parallel full-mask copies for VD OE
 
 	V_WE_R		: NODE;
 
@@ -418,8 +418,8 @@ IF MODE == "SPRINTER" GENERATE
 
 	CASE VCM[1..0] IS
 		WHEN 0 =>
-			-- BASE203 low address mux: native complete table selects 11 in row00.
-			VLA_NEXT[] = (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],VCC,VCC);
+			-- 36e low address mux: actual native row00 selects 00.
+			VLA_NEXT[] = (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
@@ -678,22 +678,22 @@ IF MODE == "SPRINTER" GENERATE
 --	V_WEX.prn	= (DFF(GND,CLK42,,!V_WEX));
 
 
-	-- BASE203: direct V_WE Q fanout; later donor delay buffers are absent.
-	V_WEMMM	= V_WE;
-	V_WEMMN	= V_WEMMM;
-	V_WEMMO	= V_WEMMN;
+	-- 3a99 measured V_WE chain: inverse-Q tap and one unity buffer, then all parallel nibble masks.
+	V_WEMMM	= LCELL(V_WE);
+	V_WEMMN	= LCELL(V_WEMMM);
+	V_WEMMO	= V_WEMMN; -- 3a99 has exactly two actual V_WE tap LCELLs
 	V_WEMM	= V_WEMMO;
 
-	V_WRM	= V_WEMMN & V_WEMMM;
-	V_WRM2	= V_WEMMN & V_WEMMM;
+	V_WRM	= V_WEMMO;
+	V_WRM2	= V_WEMMO;
 
-	V_WEM	= V_WEMMM & V_WEMMO;
-	V_WEM2	= V_WEMMM & V_WEMMO;
+	V_WEM	= V_WEMMO;
+	V_WEM2	= V_WEMMO;
 
-	V_EN3	= LCELL(!(!VXA1 & (!VXA0 or DOUBLE)));
-	V_EN2	= LCELL(!(!VXA1 & (VXA0 or DOUBLE)));
-	V_EN1	= LCELL(!(VXA1 & (!VXA0 or DOUBLE)));
-	V_EN0	= LCELL(!(VXA1 & (VXA0 or DOUBLE)));
+	V_EN3	= (!(!VLA1 & (!VLA0 or DOUBLE)));
+	V_EN2	= (!(!VLA1 & (VLA0 or DOUBLE)));
+	V_EN1	= (!(VLA1 & (!VLA0 or DOUBLE)));
+	V_EN0	= (!(VLA1 & (VLA0 or DOUBLE)));
 
 --	F_WR	= DFF(VCC,V_WE,,); -- later donor alternative; BASE203 masks are combinational
 
@@ -702,11 +702,11 @@ IF MODE == "SPRINTER" GENERATE
 	V_WR_1	= V_WRM or V_EN1;
 	V_WR_0	= V_WRM or V_EN0;
 
--- BASE204 delayed nibble-mask tap; TOP combines this with the direct /V_WR tap.
-	V_WEY3	= V_WR_3;
-	V_WEY2	= V_WR_2;
-	V_WEY1	= V_WR_1;
-	V_WEY0	= V_WR_0;
+-- 36e masks use the registered output address VLA, not the earlier VXA capture bank.
+	V_WEY3	= V_WEM or V_EN3;
+	V_WEY2	= V_WEM or V_EN2;
+	V_WEY1	= V_WEM or V_EN1;
+	V_WEY0	= V_WEM or V_EN0;
 
 	V_WR[]	= V_WR_[];
 	V_WEN[]	= V_WEY[];
