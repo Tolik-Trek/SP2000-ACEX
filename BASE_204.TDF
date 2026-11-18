@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN SP2000_f433dc288523f509
+SUBDESIGN BASE_204
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -180,6 +180,8 @@ VARIABLE
 
 	GLISSER		: NODE;
 	BLK_MR		: NODE;
+	DRAM_WRITE_ACTIVE : DFFE;
+	VIDEO_WRITE_ACTIVE : DFF;
 	VIDEO_PG	: NODE;
 
 	AUDIO_CH	: NODE;
@@ -385,12 +387,14 @@ BEGIN
 
 	D_OUT = !(/IO or /RD or LCELL((DCPP[7..4] == 0) or (DCPP[7..4] == 3))) or RD_RAM;
 
-	V_WRXX[] = !SVIDEO.V_WEN[];
+-- BASE204: direct and delayed active write taps converge before VD OE.
+-- Four measured chains: mask -> delayed tap -> tap OR -> terminal fanout.
+	V_WRXX[] = !SVIDEO.V_WEN[] or !SVIDEO.V_WR[];
 
-  	V_WRX3 = !SVIDEO.V_WEN3;
-  	V_WRX2 = !SVIDEO.V_WEN2;
-  	V_WRX1 = !SVIDEO.V_WEN1;
-  	V_WRX0 = !SVIDEO.V_WEN0;
+  	V_WRX3 = V_WRXX3;
+  	V_WRX2 = V_WRXX2;
+  	V_WRX1 = V_WRXX1;
+  	V_WRX0 = V_WRXX0;
 
 	FOR i IN 0 TO 7 GENERATE
 		D[i]	= TRI(DD[i],D_OUT);
@@ -398,8 +402,8 @@ BEGIN
 		VD2[i]	= TRI(DVD2[i],V_WRX2);
 		VD1[i]	= TRI(DVD1[i],V_WRX1);
 		VD0[i]	= TRI(DVD0[i],V_WRX0);
-		MD[i]	= TRI(DMDX[i],!/WE_OUT or WR_PORT);
-		MD[i+8]	= TRI(ACC.MDO[i+8],!/WE_OUT or WR_PORT);
+		MD[i]	= TRI(DMDX[i],DRAM_WRITE_ACTIVE or WR_PORT);
+		MD[i+8]	= TRI(ACC.MDO[i+8],DRAM_WRITE_ACTIVE or WR_PORT);
 --		MD[i+8]	= TRI(DMDY[i],!/WE or WR_PORT);
 	END GENERATE;
 
@@ -679,7 +683,7 @@ END GENERATE;
 	DOS		= DFF(DOS_,!(/M1 or /MR),,/RESET);
 	DECODE.DOS	= DOS;
 
-	DECODE.REFRESH	= CT5; -- raw203 lc_F12_5 clock=lc_A6_2=PHASE_CT5
+	DECODE.REFRESH	= CT4; -- actual BASE204 refresh clock; BASE203 uses CT5
 
 	DCPP[] = DECODE.DCPP[];
 
@@ -698,8 +702,9 @@ END GENERATE;
 
 	DOUBLE_CAS	= ACC.DOUBLE_CAS;
 
---	CAS_A	= LCELL(DECODE.CAS); -- BASE203 explicit duplicate alternative
-	CAS_A	= (DECODE.CAS); -- actual single shared CAS qualifier
+-- BASE204 uses the surviving author wire alternative: one shared native CAS qualifier.
+--	CAS_A	= LCELL(DECODE.CAS);
+	CAS_A	= (DECODE.CAS);
 
 	CASXE0	= LCELL((MCA0 == 0) or ((MCA0 == 1) & DOUBLE_CAS));
 	CASXE1	= LCELL((MCA0 == 1) or ((MCA0 == 0) & DOUBLE_CAS));
@@ -713,7 +718,12 @@ END GENERATE;
 
 --	/WE		= DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,);
 	-- BASE203: physical /WE is the existing write-qualification LCELL output.
-	/WE		= /WE_OUT;
+	-- BASE204: registered active write, sampled on -CLK42 while CAS is high.
+	DRAM_WRITE_ACTIVE.clk = !CLK42;
+	DRAM_WRITE_ACTIVE.ena = DECODE.CAS;
+	DRAM_WRITE_ACTIVE.clrn = /RESET;
+	DRAM_WRITE_ACTIVE.d = !/WE_OUT;
+	/WE = !DRAM_WRITE_ACTIVE;
 
 --	/WE		= LCELL(DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,));
 --	/WE		= LCELL(/WE_OUT or CAS_A);
@@ -827,7 +837,11 @@ END GENERATE;
 --	SVIDEO.wr		= (DECODE.MC_WRITE or DECODE.CAS or GLISSER);
 --	SVIDEO.wr		= DFF((DECODE.MC_WRITE or GLISSER or DECODE.RAS),CLK42,,/RESET);
 	-- BASE203 early write epoch: the VIDEO module captures WR on +CLK42.
-	SVIDEO.wr		= (DECODE.MC_WRITE or DECODE.CAS or GLISSER);
+	-- Author commented RAS write epoch; named physical active state has CLRN=/RESET.
+	VIDEO_WRITE_ACTIVE.clk = CLK42;
+	VIDEO_WRITE_ACTIVE.clrn = /RESET;
+	VIDEO_WRITE_ACTIVE.d = !(DECODE.MC_WRITE or GLISSER or DECODE.RAS);
+	SVIDEO.wr = !VIDEO_WRITE_ACTIVE;
 
 --	SVIDEO.vai[]	= (DECODE.GA[],A[9..0]);
 	SVIDEO.vai[]	= (DECODE.GA[],ACC.AO[9..0]);

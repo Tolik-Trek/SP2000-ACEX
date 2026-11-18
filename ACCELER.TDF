@@ -326,11 +326,12 @@ BEGIN
 
 --	Поздняя альтернатива: DO[].clk = DFF(MC_END,!CLK42,,), ena=VCC.
 	-- BASE203: отдельный captured read enable; источник C22_3 не DCP A26_1.
---	READ_CAPTURE_ENABLE = DFF(!MC_END,CLK42,,); -- BASE203 alternative
+	-- BASE204 negative-edge completion stage drives the DO bank clock directly.
 	READ_CAPTURE_CLOCK.clk = !CLK42;
 	READ_CAPTURE_CLOCK.d = MC_END;
-	DO[].clk		= READ_CAPTURE_CLOCK; -- actual derived clock, all8native fields checked
-	DO[].ena		= VCC;
+--	READ_CAPTURE_ENABLE = !READ_CAPTURE_CLOCK; -- BASE203 alternative, not used in BASE204
+	DO[].clk = READ_CAPTURE_CLOCK; -- actual derived clock, author DFF(MC_END,!CLK42)
+	DO[].ena = VCC;
 	DO[].d			= MD[];
 
 --	== accelerator functions ==

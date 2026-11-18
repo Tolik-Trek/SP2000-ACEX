@@ -96,7 +96,7 @@ VARIABLE
 	VXD3[7..0]	: DFFE;
 
 	E_WR		: NODE;
---	E_WRD		: NODE;	-- rev-203: единый ena-банк VXD+VXA+DOUBLE на !E_WR
+	E_WRD		: NODE; -- BASE204 delayed write-window qualifier for MXWE
 
 	BLANK		: NODE;
 	BORD		: NODE;
@@ -198,7 +198,6 @@ VARIABLE
 	V_WEY[3..0]	: LCELL;
 
 	V_WE_R		: NODE;
-	V_WE_PRESET_N : LCELL; -- existing early async-preset distribution boundary
 
 	V_CSX[3..0]	: NODE;
 
@@ -372,9 +371,9 @@ BEGIN
 	SCR_ENA.ena	= !E_WR;
 	SCR_ENA.d	= !(VAI19 or ZX_SCREEN);
 
---	E_WRD	= DFF(E_WR,CLK42,,);	-- rev-203: единый ena-банк 51 (lc_C14_4), E_WRD-задержки нет
-	E_WR = LCELL(WR or !(VAI19 or ZX_SCREEN) or !DFF(WR,CLK42,,));
---	E_WR = LCELL(WR or !DFF(WR,CLK42,,));
+	E_WRD	= DFF(E_WR,CLK42,,); -- BASE204 real registered qualifier for MXWE
+--	E_WR = LCELL(WR or !(VAI19 or ZX_SCREEN) or !DFF(WR,CLK42,,)); -- BASE203 range-qualified alternative
+	E_WR = LCELL(WR or !DFF(WR,CLK42,,));
 
 --	****************************************************
 
@@ -385,7 +384,7 @@ IF MODE == "SPRINTER" GENERATE
 --	MXWE	= DFF(((DFF(E_WR,CLK42,,) or SCR_ENA)  & MXWE),CLK42,,V_WE);
 	-- Active-low capture latch: logical MXWE is inverse physical state.
 	-- V_WE is asynchronous active-low preset; E_WR qualifies the D feedback.
-	MXWE	= DFF((E_WR & MXWE),CLK42,,V_WE);
+	MXWE	= DFF(((E_WRD or SCR_ENA) & MXWE),CLK42,,V_WE);
 
 	IF VAI[19] THEN
 		-- in graf mode all 256k(512k) range
@@ -667,8 +666,7 @@ IF MODE == "SPRINTER" GENERATE
 --	V_WE.prn	= LCELL(DFF(GND,!CLK42,,!V_WE));
 
 	V_WE_R		= DFF(GND,!CLK42,,!V_WE);
-	V_WE_PRESET_N = V_WE_R; -- author alternative LCELL(DFF(GND,!CLK42,,!V_WE))
-	V_WE.prn	= V_WE_PRESET_N;
+	V_WE.prn	= V_WE_R;
 	V_WET[].prn	= V_WE_R;
 
 --	V_WR[]	= LCELL(V_WE) or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
@@ -704,10 +702,11 @@ IF MODE == "SPRINTER" GENERATE
 	V_WR_1	= V_WRM or V_EN1;
 	V_WR_0	= V_WRM or V_EN0;
 
-	V_WEY3	= V_WEM or V_EN3;
-	V_WEY2	= V_WEM2 or V_EN2;
-	V_WEY1	= V_WEM or V_EN1;
-	V_WEY0	= V_WEM or V_EN0;
+-- BASE204 delayed nibble-mask tap; TOP combines this with the direct /V_WR tap.
+	V_WEY3	= V_WR_3;
+	V_WEY2	= V_WR_2;
+	V_WEY1	= V_WR_1;
+	V_WEY0	= V_WR_0;
 
 	V_WR[]	= V_WR_[];
 	V_WEN[]	= V_WEY[];

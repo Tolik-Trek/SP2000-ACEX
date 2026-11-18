@@ -282,7 +282,7 @@ BEGIN
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);	-- Авторский ранний вариант: CT1&CT2 divider, отрицательный CLK21 turbo arm.
 	Z80_BASE_DIV.clk = CLK42;
 	Z80_BASE_DIV.t = CT2 & CT1;
-	CLK_Z80	= DFF((!CLK21 & TURBO) or (Z80_BASE_DIV & !TURBO),!CLK42,,);
+	CLK_Z80	= DFF((CLK21 & TURBO) or (Z80_BASE_DIV & !TURBO),!CLK42,,);
 
 --	==============================================================
 	CLK21	= DFF((!CT0 xor CT2),CLK42,,);
@@ -307,7 +307,7 @@ BEGIN
 --	WR_AWGX		= DFF(GND,!WR_TM9_STATE,,DFF(WR_AWGX,CLK42,,)); -- later author feedback pulse alternative
 	WR_AWG_STATE.clk = !CLK42;
 	WR_AWG_STATE.ena = VCC;
---	WR_AWG_STATE.prn = !WR_TM9_STATE; -- BASE203 asynchronous alternative; actual variant has synchronous set
+--	WR_AWG_STATE.prn = !WR_TM9_STATE; -- BASE203 asynchronous alternative; BASE204 has synchronous set
 	WR_AWG_STATE.d = WR_TM9_STATE or !WR_AWG_STATE;
 	WR_AWGX = WR_AWG_STATE;
 
