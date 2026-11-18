@@ -22,5 +22,5 @@
 -- Version 10.0 9/14/2000
 -- Created: Fri Jan 25 12:59:19 2002
 
-FUNCTION acceler (clk42, /reset, ct[2..0], ras, cas, clk_z80, mc_end, mc_begin, mc_type, mc_write, ai[15..0], di[7..0], /io, /rd, /wr, /mr, /rf, /m1, /iom, dcp[7..0], mdi[15..0], acc_ena, hddr[7..0], hdd_flip, u0e, u1e, u2e, usel, uwrc7, FRACTION_STEP_EN, COUNT_LOAD_EN, ADDRESS_DOUBLE_STEP, vdwq[7..0])
-    RETURNS (continue, ao[15..0], mdo[15..0], md[7..0], g_line[7..0], glisser, acc_on, double_cas, acc_dir[7..0], ramq[7..0], ucnt[7..0], abah[7..0]);
+FUNCTION acceler (clk42, /reset, ct[2..0], ras, cas, clk_z80, mc_end, mc_begin, mc_type, mc_write, ai[15..0], di[7..0], /io, /rd, /wr, /mr, /rf, /m1, /iom, dcp[7..0], mdi[15..0], acc_ena, hddr[7..0], hdd_flip)
+    RETURNS (continue, ao[15..0], do[7..0], mdo[15..0], md[7..0], g_line[7..0], glisser, acc_on, double_cas, acc_dir[7..0]);

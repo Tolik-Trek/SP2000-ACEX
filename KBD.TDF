@@ -11,14 +11,13 @@ SUBDESIGN kbd
 	KBD_DD		: INPUT;	-- data KBD
 
 	/RF			: INPUT;	-- /rfsh
-	/IO			: INPUT;	-- /IO_CYCLE_N
+	/IO			: INPUT;	-- /iorq
 	/IOM		: INPUT;
 	/M1			: INPUT;
 
 	A[15..8]	: INPUT;
 
 	KBO[7..0]	: OUTPUT;	-- output
-	KDQ[7..0]	: OUTPUT;	-- rev: esb2.q (ec*_b) -> DCP read-path
 
 	KB_RESET	: OUTPUT;
 
@@ -30,106 +29,61 @@ SUBDESIGN kbd
 	ENA			: INPUT;
 	INT_ENA		: INPUT;
 	INT			: OUTPUT;
-
-	KB_RECEIVE_BITS[10..1] : OUTPUT;
-	KB_RECEIVE_COUNT_N[2..0] : OUTPUT;
-
-	KB_SCAN_COUNT[2..0] : INPUT;
- KB_RAW_CLOCK, KB_COUNT_CLOCK : INPUT;
- KB_ONE_TICK : OUTPUT;
-	KB_RELEASE, KB_EXT_PREFIX : OUTPUT;
-)
+	)
 VARIABLE
-    KB_RECEIVE_R[10..1] : DFF;
 
-    KB_COUNT_N_R[2..0] : DFF;
+	KB_CT[2..0]		: DFF;
+	KB_D[10..0]		: DFF;
+	KB_OFF			: DFFE;
 
-    KB_BIT_CLOCK_R, KB_CLOCK_CLEAR_N_R, KB_ZERO_TICK_R, KB_ONE_TICK_R : DFF;
+	KB_EXT			: DFF;
+	KB_ALT			: DFF;
+	KB_CTRL			: DFF;
+	KB_SH			: DFF;
 
-    KB_CT[2..0] : NODE;
+	KB_CTRL_X		: NODE;
+	KB_ALT_X		: NODE;
+	KB_SH_X			: NODE;
+	KB_XXX			: NODE;
+	KB_RESET		: DFF;
+	RXA[1..0]		: DFFE;
 
-    KB_D[10..0] : NODE;
+	K_CLK			: NODE;
+	KA[15..0]		: NODE;
+	KB_MA[2..0]		: DFF;
+	KB_MXA			: NODE;
+	KDCA[2..0]		: LCELL;
 
-    KB_OFF : DFFE;
-
-    KB_EXT : DFF;
-
-    KB_ALT : DFF;
-
-    KB_CTRL : DFF;
-
-    KB_SH : DFF;
-
-    KB_CTRL_X : NODE;
-
-    KB_ALT_X : NODE;
-
-    KB_SH_X : NODE;
-
-    KB_XXX : NODE;
-
-    KB_RESET : DFF;
-
-    RXA[1..0] : DFFE;
-
-    K_CLK : NODE;
-
-    KA[15..0] : NODE;
-
-    KB_MA[2..0] : NODE;
-
-    KB_MXA : NODE;
-
-    KDCA[2..0] : LCELL;
-
-    KDD[7..0] : DFF;
-
-    KBD[5..0] : DFF;
-
-    KD[7..0] : NODE;
-
-    KDX[5..0] : DFF;
-
-    KDXX[5..0] : DFF;
-
-    WR_KBD : NODE;
-
-    KB_OFL : NODE;
+	KDD[7..0]		: DFF;
+	KBD[5..0]		: DFF;
+	KD[7..0]		: NODE;
+	KDX[5..0]		: DFF;
+	KDXX[5..0]		: DFF;
+	WR_KBD			: NODE;
+	KB_OFL			: NODE;
 
 BEGIN
-
- -- OLD KBD.TDF:67..85 receive/count/prefix architecture. Early28a stores
- -- the complemented countdown: INIT/async clear0 means positive count7.
- KB_BIT_CLOCK_R.clk = CLK42; KB_BIT_CLOCK_R = !KB_RAW_CLOCK;
- KB_CLOCK_CLEAR_N_R.clk = CLK42; KB_CLOCK_CLEAR_N_R = KB_RAW_CLOCK;
- KB_RECEIVE_R[].clk = KB_BIT_CLOCK_R;
- KB_RECEIVE_R[] = (KBD_DD,KB_RECEIVE_R[10..2]);
- KB_COUNT_N_R[].clk = KB_COUNT_CLOCK;
- KB_COUNT_N_R[].clrn = KB_CLOCK_CLEAR_N_R;
- IF KB_COUNT_N_R[] == 7 THEN KB_COUNT_N_R[] = 7;
- ELSE KB_COUNT_N_R[] = KB_COUNT_N_R[] + 1; END IF;
- KB_RECEIVE_BITS[] = KB_RECEIVE_R[];
- KB_RECEIVE_COUNT_N[] = KB_COUNT_N_R[];
- KB_ZERO_TICK_R.clk = CLK42; KB_ZERO_TICK_R = KB_COUNT_N_R[] == 7;
- KB_ONE_TICK_R.clk = CLK42; KB_ONE_TICK_R = KB_COUNT_N_R[] == 6;
- KB_ONE_TICK = KB_ONE_TICK_R;
- KB_OFF.clk = KB_ZERO_TICK_R; KB_OFF.ena = !KB_EXT;
- KB_OFF = KB_D[] == B"XX11110000X";
- KB_EXT.clk = KB_ONE_TICK_R; KB_EXT = KB_D[] == B"XX11100000X";
-
-	KB_MA[] = KB_SCAN_COUNT[];
-	KB_RELEASE = KB_OFF; KB_EXT_PREFIX = KB_EXT;
-
-    -- Count is exposed positively for the author key decoder, but its real
-    -- storage is the existing low-active F10 bank: clear0 means positive7.
-    -- This preserves native INIT and asynchronous-clear polarity explicitly.
-    KB_CT[] = !KB_RECEIVE_COUNT_N[];
-    KB_D[10..1] = KB_RECEIVE_BITS[];
-    KB_D[0] = GND; -- unused shifted-out stop/start lane, all decoders mask it
 
 	INT		= DFF((KB_CT[] == 0),CLK42,,INT_ENA);
 
 --	KB_CT[].clk	= DFF(CLK_K,CLK42,,);
+	KB_CT[].clk	= CLK_K;
+	KB_CT[].prn	= DFF(KBD_CC,CLK42,,);
+
+	CASE KB_CT[] IS
+		WHEN 0 => KB_CT[].d	= GND;
+		WHEN 1,2,3,4,5,6,7 => KB_CT[].d	= KB_CT[] - 1;
+	END CASE;
+
+	KB_D[].clk	= DFF(!KBD_CC,CLK42,,);
+	KB_D[].d	= (KBD_DD,KB_D[10..1]);
+
+	KB_OFF.ena	= !KB_EXT;
+	KB_OFF.clk	= DFF((KB_CT[] == 0),CLK42,,);
+	KB_OFF.d	= KB_D[] == B"XX11110000X";
+
+	KB_EXT.clk	= DFF((KB_CT[] == 1),CLK42,,);
+	KB_EXT.d	= KB_D[] == B"XX11100000X";
 
 	KB_CTRL.clk	= !KB_CT2;
 	KB_ALT.clk	= !KB_CT2;
@@ -137,9 +91,8 @@ BEGIN
 
 	KB_CTRL_X	= LCELL(KB_D[] == B"XXXXX1X100X");
 	KB_ALT_X	= LCELL(KB_D[] == B"XXXXX1X001X");
---	rev: cascade-хвоста в этом декоде нет (45→43 цепи) — обычный AND
-	KB_SH_X		= LCELL((KB_D[] == B"XX0X01X0XXX") &
-			   ((KB_D[] == B"XXX1XX1X01X") or (KB_D[] == B"XXX0XX0X10X")));
+	KB_SH_X		= LCELL(KB_D[] == B"XX0X01X0XXX") &
+			   CASCADE((KB_D[] == B"XXX1XX1X01X") or (KB_D[] == B"XXX0XX0X10X"));
 	KB_XXX		= LCELL(KB_D[] == B"XX000X0XXXX");
 
 	CASE KB_OFF IS
@@ -176,6 +129,10 @@ BEGIN
 		WHEN B"11" => KA[15..8]	= KB_D[8..1];
 	END CASE;
 
+	KB_MA[].clk	= CLK42;
+	KB_MA[].d	= KB_MA[] + 1;
+	KB_MA[].clrn = !DFF(/IO,CLK42,,);
+
 	KB_MXA	= DFF((		(((KB_MA[] == 7) & A15) or ((KB_MA[] == 6) & A14))
 					or	(((KB_MA[] == 5) & A13) or ((KB_MA[] == 4) & A12))
 					or	(((KB_MA[] == 3) & A11) or ((KB_MA[] == 2) & A10))
@@ -210,7 +167,6 @@ BEGIN
 	KD[] = lpm_ram_dq((B"11",KDX[5..0]),KA[15..8],!WR_KBD,CLK42,)
 		WITH (lpm_width=8,lpm_widthad=8,lpm_file="KBD_INI2.MIF",
 		lpm_outdata="UNREGISTERED");
-	KDQ[] = KD[];	-- rev: esb2.q -> DCP (ec*_b-флаги read-path)
 
 	KBD[].clk	= CLK42;
 	KBD[].prn	= DFF(VCC,KB_MA2,(!/IO & ENA),);

@@ -22,5 +22,5 @@
 -- Version 10.0 9/14/2000
 -- Created: Thu May 03 21:43:31 2001
 
-FUNCTION kbd (clk42, clk_k, kbd_cc, kbd_dd, /rf, /io, /iom, /m1, a[15..8], ena, int_ena, kb_scan_count[2..0],kb_raw_clock,kb_count_clock)
-    RETURNS (kbo[7..0], kdq[7..0], kb_reset, kb_f12, kb_ctrl, kb_alt, kb_sh, int,kb_receive_bits[10..1],kb_receive_count_n[2..0],kb_release,kb_ext_prefix,kb_one_tick);
+FUNCTION kbd (clk42, clk_k, kbd_cc, kbd_dd, /rf, /io, /iom, /m1, a[15..8], ena, int_ena)
+    RETURNS (kbo[7..0], kb_reset, kb_f12, kb_ctrl, kb_alt, kb_sh, int);

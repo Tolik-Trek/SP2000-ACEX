@@ -1,3 +1,27 @@
-FUNCTION video2 (CLK42, START_UP, XA2P, XA3P, WR, VW_STB, VA_EN, VDWCK, ACC_RAM_SOURCE, ACC_MD_COPY, IOX, ACCQ[7..0], MDP[15..8], GRFX, PHB, PHC, ACC_CYCLE_N, SCREEN_ROW6_XOR, IVSTB, PHA, IP2, ID4, IPAT, IC1, VAI[19..0], D[7..0], MDI[15..0], VDM0[7..0], VDM1[7..0], VDM2[7..0], VDM3[7..0], ZX_PORT[7..0], DIR_PORT[7..0], DOUBLE_CAS, MOUSE_X[9..0], MOUSE_Y[9..0], MA_PHASE[1..0], XA_READ_PHASE, XA_HALF_CYCLE, VRAM_CAPTURE_A[7..0], VRAM_CAPTURE_B[7..0], border_bits[2..0])
- WITH (MODE, MOUSE)
- RETURNS (CT[5..0], CTH[5..0], CTV[8..0], CTF[6..0], BLANK, IVD3[7..2], IVD30, VAO[15..0], VDO0[7..0], VDO1[7..0], VDO2[7..0], VDO3[7..0], V_WR[3..0], V_WEN[3..0], V_CS[1..0], WR_PIX, INTT, H_RESYNC, V_RESYNC, COLOR_ALL_ONES);
+-- Copyright (C) 1988-2000 Altera Corporation
+-- Any megafunction design, and related net list (encrypted or decrypted),
+-- support information, device programming or simulation file, and any other
+-- associated documentation or information provided by Altera or a partner
+-- under Altera's Megafunction Partnership Program may be used only to
+-- program PLD devices (but not masked PLD devices) from Altera.  Any other
+-- use of such megafunction design, net list, support information, device
+-- programming or simulation file, or any other related documentation or
+-- information is prohibited for any other purpose, including, but not
+-- limited to modification, reverse engineering, de-compiling, or use with
+-- any other silicon devices, unless such use is explicitly licensed under
+-- a separate agreement with Altera or a megafunction partner.  Title to
+-- the intellectual property, including patents, copyrights, trademarks,
+-- trade secrets, or maskworks, embodied in any such megafunction design,
+-- net list, support information, device programming or simulation file, or
+-- any other related documentation or information provided by Altera or a
+-- megafunction partner, remains with Altera, the megafunction partner, or
+-- their respective licensors.  No other licenses, including any licenses
+-- needed under any third party's intellectual property, are provided herein.
+
+-- MAX+plus II Include File
+-- Version 10.0 9/14/2000
+-- Created: Mon Nov 19 00:36:42 2001
+
+FUNCTION video2 (clk42, start_up, copy_sinc_h, copy_sinc_v, wr, vai[19..0], d[7..0], mdi[15..0], vdm0[7..0], vdm1[7..0], vdm2[7..0], vdm3[7..0], zx_port[7..0], dir_port[7..0], double_cas, mouse_x[9..0], mouse_y[9..0])
+    WITH (MODE, MOUSE)
+    RETURNS (ct[5..0], cth[5..0], ctv[8..0], ctf[6..0], blank, vao[15..0], vdo0[7..0], vdo1[7..0], vdo2[7..0], vdo3[7..0], v_wr[3..0], v_wen[3..0], v_cs[1..0], wr_pix, intt);

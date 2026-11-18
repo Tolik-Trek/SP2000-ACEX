@@ -1,2 +1,26 @@
-FUNCTION dcp (CLK42, /RESET, CT[5..0], CTH[5..0], XA0, XA1, XA2, XA3, C68, A[15..0], DI[7..0], /IO, /RD, /WR, /MR, /RF, /M1, MDX[15..0], CA[15..0], G_LINE[9..0], UCNT[7..0], ABAH[7..0], KDQ[7..0], AYDQ[7..0], AY_READ_CAPTURE_EN,kb_receive_bits[10..1],kb_receive_count_n[2..0],kb_release,kb_ext_prefix,kb_one_tick)
- RETURNS (/RES, DMUX[7..0], DOE, MA[11..0], CLK_Z80, TURBO, /WAIT, /IOM, /IOMM, RA[17..14], PAGE[11..0], TYPE[3..0], CS_ROM, CS_RAM, V_RAM, PORT, DOS, WR_DWG, WR_AWG, GA[9..0], GRAF, SP_SCR, SP_SA, SCR128, HDD_DATA, HDD_FLIP, RAM, BLK_R, DCPP[7..0], RDKMQ, XACQ, CSCH, WEQ, RASQ, CASQ[3..0], VA_EN, VW_STB, MDOE, MDQ[7..0], VDWQ[7..0], MCENDQ, MTYPEQ, ACC_RAM_SOURCE, ACC_MD_COPY, U0_ENA, U1_ENA, U2_ENA, UCNT_SEL, U_WRC7, ACC_FRACTION_STEP_EN, ACC_COUNT_LOAD_EN_R, MD_READ_END_CLOCK, ACC_CYCLE_N, SCREEN_ROW6_XOR, SOFT_COUNT_CLEAR_N, KEY_RESET_INHIBIT_R, KEY_READY_N_R, CBL_ENABLE_R, MA_PHASE[1..0], XA_READ_PHASE, XA_HALF_CYCLE, VRAM_CAPTURE_A[7..0], VRAM_CAPTURE_B[7..0], all_mode0_n, kb_rx_clock, kb_rx_data, md_low_out[7..0], tape_out, video_mode0, xa_write_ena, xa_aux_write_ena, border_latch[4..0], io_write_phase, kb_scan_count[2..0], io_cycle_active, cbl_read_addr[7..0]);
+-- Copyright (C) 1988-2000 Altera Corporation
+-- Any megafunction design, and related net list (encrypted or decrypted),
+-- support information, device programming or simulation file, and any other
+-- associated documentation or information provided by Altera or a partner
+-- under Altera's Megafunction Partnership Program may be used only to
+-- program PLD devices (but not masked PLD devices) from Altera.  Any other
+-- use of such megafunction design, net list, support information, device
+-- programming or simulation file, or any other related documentation or
+-- information is prohibited for any other purpose, including, but not
+-- limited to modification, reverse engineering, de-compiling, or use with
+-- any other silicon devices, unless such use is explicitly licensed under
+-- a separate agreement with Altera or a megafunction partner.  Title to
+-- the intellectual property, including patents, copyrights, trademarks,
+-- trade secrets, or maskworks, embodied in any such megafunction design,
+-- net list, support information, device programming or simulation file, or
+-- any other related documentation or information provided by Altera or a
+-- megafunction partner, remains with Altera, the megafunction partner, or
+-- their respective licensors.  No other licenses, including any licenses
+-- needed under any third party's intellectual property, are provided herein.
+
+-- MAX+plus II Include File
+-- Version 10.0 9/14/2000
+-- Created: Mon May 14 09:29:40 2001
+
+FUNCTION dcp (clk42, /reset, ct[2..0], continue, a[15..0], di[7..0], turbo_hand, /io, /rd, /wr, /mr, /rf, /m1, md[7..0], dos, refresh, g_line[9..0], test_r, acc_on, double_cas)
+    RETURNS (/res, ras, cas, mc_end, mc_begin, mc_type, mc_write, do[7..0], ma[11..0], mca[1..0], clk_z80, turbo, /wait, /iom, /iomm, ra[17..14], page[11..0], type[3..0], cs_rom, cs_ram, v_ram, port, wr_dwg, wr_tm9, wr_awg, rd_kp11, port_write_clk, kp11_mix, ga[9..0], graf, sp_scr, sp_sa, scr128, hdd_data, hdd_flip, ram, blk_r, pn4q, dcpp[7..0]);

@@ -23,4 +23,4 @@
 -- Created: Sat May 26 07:09:40 2001
 
 FUNCTION ay (/reset, clk42, ay_t[8..0], ay_d_wr, ay_a_wr, d[7..0], beeper)
-    RETURNS (aydq[7..0], ay_ch_a[3..0], ay_ch_b[3..0], ay_ch_c[3..0], ay_ch_l[9..0], ay_ch_r[9..0], ay_ch_val, AY_READ_CAPTURE_EN, bit_clock_delay);
+    RETURNS (do[7..0], ay_ch_a[3..0], ay_ch_b[3..0], ay_ch_c[3..0], ay_ch_l[9..0], ay_ch_r[9..0], ay_ch_val);

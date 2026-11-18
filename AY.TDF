@@ -2,19 +2,19 @@
 	TITLE "AY-3-8910";
 
 include "lpm_ram_dq";
+include "lpm_add_sub";
 
 SUBDESIGN ay
 	(
 	/RESET			: INPUT;
 	CLK42			: INPUT;	-- такты 42
-	AY_T[8..0]		: INPUT;	-- внешний счетчик тактов (CTH2..0,CT5..0)
+	AY_T[8..0]		: INPUT;	-- внешний счетчик тактов
 
 	AY_D_WR			: INPUT;
 	AY_A_WR			: INPUT;
 
 	D[7..0]			: INPUT;
-	AYDQ[7..0]		: OUTPUT;	-- rev: esb3.q (ec*_c) -> DCP read-path
-	AY_READ_CAPTURE_EN			: OUTPUT;	-- rev lc_AY_READ_CAPTURE_EN = !C23_1 & !C8_2: ena esb3-сэмплеров (общий с DCP, дедуп)
+	DO[7..0]		: OUTPUT;
 
 	AY_CH_A[3..0]	: OUTPUT;
 	AY_CH_B[3..0]	: OUTPUT;
@@ -26,280 +26,343 @@ SUBDESIGN ay
 	AY_CH_VAL		: OUTPUT;	-- chanels data valid
 	BEEPER			: INPUT;
 
-	BIT_CLOCK_DELAY : OUTPUT;
-)
-
+	)
 VARIABLE
-    AY_CCC[7..0] : DFF;
 
-    AY_ADR[3..0] : DFF;
+	BD[7..0]		: DFFE;
+	BWR				: DFFE;
+	AWR				: DFFE;
 
-    AY_SHAPE_ADR_R : DFF;
+	AY_DI[7..0]		: NODE;
+	AY_DO[7..0]		: NODE;
 
-    BD[7..0] : DFFE;
+	AY_F_RES		: NODE;
+	AY_F_R1			: NODE;
 
-    BWR : DFFE;
+	AY_ADR[7..0]	: DFF;
+	AY_AAX[1..0]	: DFF;
 
-    SHAPE_RESTART_N : DFF;
+	AY_X_[5..0] 	: DFFE;
+	AY_GF[3..0] 	: DFFE;
 
-    ENV_RESET_PIPE[1..0] : DFF;
+	AY_OUT[3..1]	: DFFE;
+	AY_OUTS[3..1]	: NODE;
 
-    AY_DAT[7..0] : DFFE;
+	AY_CLK1			: NODE;
+	AY_SH[16..0]	: DFFE;
+	AY_AA[3..0]		: DFF;
+	AY_SH_Q			: NODE;
 
-    AY_C : DFFE;
+	AY_ABLK			: NODE;
+	AY_BBLK         : NODE;
+	AY_AINV         : NODE;
+	AY_BINV         : NODE;
 
-    BORROW_BASE_R, PERIOD_HIGH_R, BORROW_IN_R : DFF;
+	AY_ADRX[7..0]	: NODE;
+	AY_CCC[8..0]	: DFF;
+	AY_AX[7..0]		: NODE;
+	AY_C			: DFFE;
+	AY_CX			: DFFE;
+	AY_CXX			: DFFE;
+	AY_WR			: NODE;
+	AY_VA[3..0]		: DFFE;
+	AY_VAR			: DFFE;
+	AY_VX			: DFFE;
 
-    DAT_WRITE_R, DAT_WRITE_DELAY_R : DFF;
+	AY_DAT_WR		: DFF;
+	AY_DAT[7..0]	: DFFE;
 
-    AY_DAT_EN, AY_DAT_ZERO, AY_DAT_ZERO_TONE, AY_DAT_ZERO_NOISE : NODE;
+	AY_DQ1[3..0]	: DFFE;
+	AY_DQ2[3..0]	: DFFE;
+	AY_DQ3[3..0]	: DFFE;
 
-    AY_CPU_MASK4_N, AY_CPU_MASK7_N : NODE;
+	AY_DQX[3..0]	: DFFE;
+	AY_OUTSX		: NODE;
+	AY_CH_MIX		: DFF;
 
-    AY_RAM_Q[7..0], AY_DO[7..0], AY_DI[7..0], AY_AX[7..0] : NODE;
+	AY_AMP[3..0]	: DFF;
 
-    RAM_DATA_BUFFER[7..0] : NODE;
+	AY_DD[7..0]		: DFFE;
 
-    RAM_ADDR_CPU_SCAN[3..0], RAM_ADDR_LOW[3..0] : NODE;
+	AY_CH_A[3..0]	: DFF;
+	AY_CH_B[3..0]   : DFF;
+	AY_CH_C[3..0]   : DFF;
 
-    RAM_SCAN, RAM_OP_WRITE_N, AY_WR : NODE;
+	AY_CH_CS[8..0]	: DFF;
+	AY_CH_LX[10..0]	: DFFE;
+	AY_CH_RX[10..0]	: DFFE;
 
-    SLOT_CH[3..1], SLOT_NOISE, SLOT_ENV, SLOT_MIXER,
-    SLOT_SHAPE, SLOT_AMP : DFF;
+	AY_CH_L[9..0]	: DFF;
+	AY_CH_R[9..0]	: DFF;
 
-    SLOT_RESET, SLOT_COUNT, SLOT_PERIOD : DFF;
+	AY_CH_DIR[7..0]	: DFFE;
 
-    DECODE_CH[3..1], DECODE_NOISE, DECODE_ENV, DECODE_MIXER,
-    DECODE_SHAPE, DECODE_AMP : NODE;
+	AY_OUTS1X		: NODE;
+	AY_OUTS2X       : NODE;
+	AY_OUTS3X       : NODE;
 
-    OP_AUDIO, OP_ENV_TYPE : NODE;
-
-    PERIOD_RESET_R, PERIOD_LOW_R : DFF;
-
-    AY_CX, AY_CXX : DFFE;
-
-    PERIOD_TONE_NEXT, PERIOD_NOISE_NEXT : NODE;
-
-    TONE[3..1] : DFFE;
-
-    AY_X_[5..0] : DFFE;
-
-    MIX_GATE[3..1], MIX_SELECT_A, NOISE_TICK : NODE;
-
-    AY_CH_MIX : DFF;
-
-    AY_SH[16..0] : DFFE;
-
-    AY_ENV[5..0] : DFFE;
-
-    AY_GF[3..0] : DFFE;
-
-    ENV_STOP_R, ENV_ZERO_R, ENV_INVERT_R : DFF;
-
-    AY_AA[3..0], AY_AMP[3..0] : DFF;
-
-    AY_DQX[3..0] : DFFE;
-
-    BEEPER_R : DFF;
-
-    SAMPLE_VALID_R, SUM_CLEAR_R : DFF;
-
-    SAMPLE_PHASE, CLEAR_PHASE : NODE;
-
-    CH3_DELAY_R, CH3_WIDE_R, CH1_DELAY_R, CH1_WIDE_R : DFF;
-
-    CENTER_WIDE_R, SUM_L_STAGE_R, SUM_R_STAGE_R, SUM_L_EN_R,
-    SUM_R_EN_R : DFF;
-
-    AY_CH_CS[8..0] : DFF;
-
-    AY_CH_LX[10..0], AY_CH_RX[10..0] : DFFE;
+	AY_OUTS1Y       : NODE;
+--	AY_OUTS2Y       : NODE;
+	AY_OUTS3Y       : NODE;
 
 BEGIN
-    -- All state samples TG42 rising except CPU address and the two-stage
-    -- envelope reset release, which retain their original derived clocks.
-    AY_CCC[].clk = CLK42;
-    AY_CCC[] = (!AY_T7,AY_T[6..0]);
-    AY_ADR[].clk = AY_A_WR;
-    AY_ADR[] = D[3..0];
-    AY_SHAPE_ADR_R.d = D[3..0] == H"D"; AY_SHAPE_ADR_R.clk = AY_A_WR;
-    AY_CPU_MASK4_N = LCELL(!(AY_ADR[] == B"00X1") & !(AY_ADR[] == B"0101"));
-    AY_CPU_MASK7_N = LCELL(!(AY_ADR[] == B"00X1") & !(AY_ADR[] == B"0101") & !(AY_ADR[] == B"0110"));
-    BD[].clk = CLK42; BD[].ena = AY_CCC1; BD[] = D[];
-    BD[3..0].clrn = VCC;
-    BD4.clrn = AY_CPU_MASK4_N; BD[7..5].clrn = AY_CPU_MASK7_N;
-    BWR.d = AY_D_WR; BWR.clk = CLK42; BWR.ena = AY_CCC1;
-    SHAPE_RESTART_N.d = BWR or !AY_SHAPE_ADR_R; SHAPE_RESTART_N.clk = CLK42;
-    ENV_RESET_PIPE[].clk = AY_CCC7;
-    ENV_RESET_PIPE[].clrn = SHAPE_RESTART_N;
-    ENV_RESET_PIPE[] = (ENV_RESET_PIPE0,VCC);
 
-    -- Logical lanes0..7 = physical3,7,0,4,1,5,2,6.
-    AY_DO[] = (AY_RAM_Q6,AY_RAM_Q2,AY_RAM_Q5,AY_RAM_Q1,AY_RAM_Q4,AY_RAM_Q0,AY_RAM_Q7,AY_RAM_Q3);
-    AYDQ[] = AY_RAM_Q[];
-    AY_READ_CAPTURE_EN = LCELL(!AY_CCC1 & !AY_CCC0);
-    RAM_SCAN = AY_READ_CAPTURE_EN;
+--	====== AY8910 III version =========
 
-    -- Phase01 writes BD; all other phases write the decremented period byte.
-    -- Keep the original SOP at each byte-lane LUT, without a separate CPU
-    -- phase fanout cell. The bank still has one common mux function.
-    FOR i IN 0 TO 7 GENERATE
-        RAM_DATA_BUFFER[i] = LCELL((BD[i] & !AY_CCC1 & AY_CCC0) or (AY_DAT[i] & !AY_CCC0) or (AY_DAT[i] & AY_CCC1));
-    END GENERATE;
-    AY_DI[] = (RAM_DATA_BUFFER1,RAM_DATA_BUFFER7,RAM_DATA_BUFFER5,RAM_DATA_BUFFER3,RAM_DATA_BUFFER0,RAM_DATA_BUFFER6,RAM_DATA_BUFFER4,RAM_DATA_BUFFER2);
+	BD[].clk	= CLK42;
+	AWR.clk		= CLK42;
+	BWR.clk		= CLK42;
 
-    -- Keep the two real low-address mux boundaries. Each stage is a word;
-    -- the LCELL arrays represent the original CPU/scan and indirect-port cuts.
+	BD[].ena	= AY_CCC1;
+	BWR.ena		= AY_CCC1;
+	AWR.ena		= AY_CCC1;
 
-    FOR i IN 0 TO 3 GENERATE
-        RAM_ADDR_CPU_SCAN[i] = LCELL((AY_ADR[i] & AY_CCC0 & !AY_CCC1) or (!AY_CCC0 & AY_CCC[i+2] & !AY_CCC1));
-        RAM_ADDR_LOW[i] = LCELL(RAM_ADDR_CPU_SCAN[i] or (AY_DO[i] & AY_CCC1));
-    END GENERATE;
-    AY_AX[3..0] = RAM_ADDR_LOW[];
-    AY_AX4 = LCELL((AY_CCC6 & RAM_SCAN) or (AY_CCC1 & AY_DO4));
-    AY_AX5 = LCELL(AY_CCC7 & RAM_SCAN);
-    AY_AX6 = GND; AY_AX7 = RAM_SCAN;
-    RAM_OP_WRITE_N = LCELL((AY_CXX & AY_DO7) or AY_DO5 or !AY_DO6);
-    AY_WR = LCELL((!BWR & AY_CCC0 & !AY_CCC1) or (!RAM_OP_WRITE_N & AY_CCC1));
-    AY_RAM_Q[] = lpm_ram_dq(AY_DI[],AY_AX[],AY_WR,CLK42,CLK42)
-        WITH(lpm_width=8,lpm_widthad=8,lpm_file="AY.MIF");
+	BD[7..5].clrn = !((AY_ADR[3..0] == B"00X1") or -- ch 1,2
+					  (AY_ADR[3..0] == B"0101") or -- ch 3
+					  (AY_ADR[3..0] == B"0110")    -- ch shum
+					 );
+	BD4.clrn	  = !((AY_ADR[3..0] == B"00X1") or -- ch 1,2
+				  	  (AY_ADR[3..0] == B"0101")    -- ch 3
+					 );
 
-    DAT_WRITE_R.d = AY_DO6 or !AY_CCC1; DAT_WRITE_R.clk = CLK42;
-    DAT_WRITE_DELAY_R.d = DAT_WRITE_R; DAT_WRITE_DELAY_R.clk = CLK42;
-    AY_DAT_EN = LCELL(!DAT_WRITE_DELAY_R);
-    BORROW_BASE_R.d = !AY_DO5; BORROW_BASE_R.clk = CLK42;
-    PERIOD_HIGH_R.d = AY_DO7; PERIOD_HIGH_R.clk = CLK42;
-    BORROW_IN_R.d = (PERIOD_HIGH_R & AY_C) or BORROW_BASE_R; BORROW_IN_R.clk = CLK42;
-    (AY_C.clk,AY_DAT[].clk) = CLK42;
-    (AY_C.ena,AY_DAT[].ena) = AY_DAT_EN;
-    (AY_C,AY_DAT[]) = (GND,AY_DO[]) - (B"00000000",BORROW_IN_R);
-    AY_DAT_ZERO = LCELL((AY_DAT[3..0] == 0) & CASCADE(AY_DAT[7..4] == 0));
-    AY_DAT_ZERO_TONE = LCELL(AY_DAT_ZERO);
-    AY_DAT_ZERO_NOISE = LCELL(AY_DAT_ZERO);
+	BD[]		= D[];
 
-    -- Opcode011 selects channel1,2,3,noise,envelope,mixer,shape by low3 bits.
-    -- Preserve decoder LCELL boundaries shared by the registered slot controls.
-    OP_AUDIO = AY_CCC1 & (AY_DO[7..5] == B"011");
-    DECODE_CH1 = LCELL(AY_CCC1 & (AY_DO[2..0] == 1));
-    DECODE_CH2 = LCELL(AY_CCC1 & (AY_DO[2..0] == 2));
-    DECODE_CH3 = LCELL(AY_CCC1 & (AY_DO[2..0] == 3));
-    DECODE_NOISE = LCELL(AY_CCC1 & (AY_DO[2..0] == 4));
-    DECODE_ENV = LCELL(AY_DO6 & AY_DO5 & AY_DO2 & !AY_DO1);
-    DECODE_MIXER = LCELL(AY_CCC1 & (AY_DO[2..0] == 6));
-    DECODE_SHAPE = LCELL(AY_CCC1 & (AY_DO[2..0] == 7));
-    DECODE_AMP = LCELL(AY_CCC1 & ((AY_DO1 & !AY_DO2) or (!AY_DO2 & AY_DO0)));
-    SLOT_CH[].clk = CLK42;
-    SLOT_CH1 = DECODE_CH1 & (AY_DO[7..5] == B"011");
-    SLOT_CH2 = DECODE_CH2 & (AY_DO[7..5] == B"011");
-    SLOT_CH3 = DECODE_CH3 & (AY_DO[7..5] == B"011");
-    SLOT_NOISE.d = DECODE_NOISE & (AY_DO[7..5] == B"011"); SLOT_NOISE.clk = CLK42;
-    SLOT_ENV.d = LCELL(!ENV_STOP_R & AY_CCC1 & !AY_CX) & DECODE_ENV & AY_DO0 & !AY_DO7; SLOT_ENV.clk = CLK42;
-    SLOT_MIXER.d = DECODE_MIXER & (AY_DO[7..5] == B"011"); SLOT_MIXER.clk = CLK42;
-    SLOT_SHAPE.d = DECODE_SHAPE & (AY_DO[7..5] == B"011"); SLOT_SHAPE.clk = CLK42;
-    SLOT_AMP.d = DECODE_AMP & (AY_DO[7..5] == B"011"); SLOT_AMP.clk = CLK42;
-    SLOT_RESET.d = AY_CCC1 & (AY_DO[7..5] == 0); SLOT_RESET.clk = CLK42;
-    SLOT_COUNT.d = AY_CCC1 & ((AY_DO[7..5] == B"010") or (AY_DO[7..5] == B"111")); SLOT_COUNT.clk = CLK42;
-    SLOT_PERIOD.d = AY_DO[7..5] == B"010"; SLOT_PERIOD.clk = CLK42;
-    PERIOD_RESET_R.d = (!/RESET & AY_DO0) or (!ENV_RESET_PIPE1 & !AY_DO0); PERIOD_RESET_R.clk = CLK42;
-    PERIOD_LOW_R.d = AY_DO0; PERIOD_LOW_R.clk = CLK42;
-    PERIOD_TONE_NEXT = LCELL(!AY_DAT_ZERO_TONE or AY_CX);
-    PERIOD_NOISE_NEXT = LCELL((!AY_C or !PERIOD_LOW_R) & (AY_CXX or !AY_DAT_ZERO_NOISE));
-    (AY_CX.clk,AY_CXX.clk) = CLK42;
-    (AY_CX.clrn,AY_CXX.clrn) = !SLOT_RESET;
-    (AY_CX.ena,AY_CXX.ena) = SLOT_COUNT;
-    IF SLOT_PERIOD THEN
-        AY_CX = PERIOD_TONE_NEXT; AY_CXX = PERIOD_NOISE_NEXT;
-    ELSE AY_CX = !PERIOD_RESET_R; AY_CXX = !PERIOD_RESET_R; END IF;
+	AWR			= AY_A_WR;
+--	BWR			= (AY_D_WR or !(AY_ADR[5..4] == 0));
+	BWR			= AY_D_WR;
 
-    TONE[].clk = CLK42;
-    FOR ch IN 1 TO 3 GENERATE
-        TONE[ch].ena = SLOT_CH[ch];
-        TONE[ch] = TONE[ch] $ !AY_CX;
-        MIX_GATE[ch] = LCELL((TONE[ch] or AY_X_[ch-1]) & (AY_X_[ch+2] or !AY_SH0));
-    END GENERATE;
-    AY_X_[].clk = CLK42; AY_X_[].ena = SLOT_MIXER; AY_X_[] = AY_DAT[5..0];
-    MIX_SELECT_A = LCELL((MIX_GATE3 & AY_DO0) or (!AY_DO0 & MIX_GATE2));
-    AY_CH_MIX.d = (MIX_SELECT_A & AY_DO1) or (MIX_GATE1 & !AY_DO1); AY_CH_MIX.clk = CLK42;
-    NOISE_TICK = LCELL(!AY_CXX & SLOT_NOISE);
-    -- Early28a stores the complemented noise phase, with asynchronous clear.
-    -- This is an XNOR shift word, unlike the later author's preset/XOR phase.
-    AY_SH[].clk = CLK42; AY_SH[].ena = NOISE_TICK; AY_SH[].clrn = /RESET;
-    AY_SH[] = (!(AY_SH3 $ AY_SH0),AY_SH[16..1]);
+	AY_CH_DIR[].clk	= AY_D_WR;
+	AY_CH_DIR[].ena	= (AY_ADR[] == B"XXX10000");
+	AY_CH_DIR[].d	= D[];
+	AY_CH_DIR[].clrn= /RESET;
 
-    -- Six-bit envelope ramp: lowbit is rate phase, next4 are volume, bit5
-    -- marks the first completed period. Reset release is ENV_RESET_PIPE1.
-    AY_ENV[].clk = CLK42; AY_ENV[].ena = SLOT_ENV;
-    AY_ENV[].clrn = ENV_RESET_PIPE1; AY_ENV[] = AY_ENV[] + 1;
-    AY_GF[].clk = CLK42; AY_GF[].ena = SLOT_SHAPE; AY_GF[] = AY_DAT[3..0];
-    ENV_STOP_R.d = AY_ENV5 & (AY_GF0 or !AY_GF3); ENV_STOP_R.clk = CLK42;
-    ENV_ZERO_R.d = AY_ENV5 & !AY_GF3; ENV_ZERO_R.clk = CLK42;
-    ENV_INVERT_R.d = AY_ENV5 & AY_GF3 & (AY_GF0 $ AY_GF1); ENV_INVERT_R.clk = CLK42;
-    AY_AA[].clk = CLK42;
-    AY_AA[] = !(AY_ENV[4..1] $ AY_GF2 $ ENV_INVERT_R) & !ENV_ZERO_R;
-    AY_AMP[].clk = CLK42;
-    IF AY_DAT4 THEN AY_AMP[] = AY_AA[]; ELSE AY_AMP[] = AY_DAT[3..0]; END IF;
-    BEEPER_R.d = BEEPER & SLOT_NOISE; BEEPER_R.clk = CLK42;
-    AY_DQX[].clk = CLK42; AY_DQX[].ena = SLOT_AMP;
-    AY_DQX[].clrn = !SLOT_NOISE;
-    AY_DQX[].prn = B"0010" or !BEEPER_R;
-    AY_DQX[] = AY_AMP[] & AY_CH_MIX;
+	AY_CCC[].clk	= CLK42;
+	AY_CCC[8..0].d	= AY_T[];
 
-    -- Independent left/right slot pipelines: left is channels2+3, right1+2.
-    CH3_DELAY_R.d = SLOT_CH3; CH3_DELAY_R.clk = CLK42;
-    CH3_WIDE_R.d = SLOT_CH3 or CH3_DELAY_R; CH3_WIDE_R.clk = CLK42;
-    CH1_DELAY_R.d = SLOT_CH1; CH1_DELAY_R.clk = CLK42;
-    CH1_WIDE_R.d = SLOT_CH1 or CH1_DELAY_R; CH1_WIDE_R.clk = CLK42;
-    CENTER_WIDE_R.d = SLOT_NOISE or SLOT_CH2; CENTER_WIDE_R.clk = CLK42;
-    SUM_L_STAGE_R.d = CENTER_WIDE_R or CH3_WIDE_R or SLOT_CH3 or SLOT_CH2; SUM_L_STAGE_R.clk = CLK42;
-    SUM_R_STAGE_R.d = CENTER_WIDE_R or CH1_WIDE_R or SLOT_CH1 or SLOT_CH2; SUM_R_STAGE_R.clk = CLK42;
-    SUM_L_EN_R.d = SUM_L_STAGE_R; SUM_L_EN_R.clk = CLK42;
-    SUM_R_EN_R.d = SUM_R_STAGE_R; SUM_R_EN_R.clk = CLK42;
-    SAMPLE_PHASE = LCELL(AY_CCC5 & AY_CCC4 & !AY_CCC3);
-    CLEAR_PHASE = LCELL(!AY_CCC3 & !AY_CCC5 & !AY_CCC4);
-    SAMPLE_VALID_R.d = SAMPLE_PHASE & AY_CCC7 & !AY_CCC2 & AY_CCC6; SAMPLE_VALID_R.clk = CLK42;
-    SUM_CLEAR_R.d = CLEAR_PHASE & !AY_CCC7 & !AY_CCC2 & !AY_CCC6; SUM_CLEAR_R.clk = CLK42;
--- Logical AY amplitude, after restoring the physical CASE-to-adder lane order.
--- OLD_AHDL/SP2000/AY.TDF:321-339 has the identical16 levels.
--- The raw CASE tuple numeric value is not the logical adder operand value.
-	AY_CH_CS[].clk = CLK42;
+	(AY_AAX[].clk,AY_ADR[].clk)	= AY_A_WR;
+	AY_ADR[].d		= D[];
+
+	-- Write to 0D register
+	AY_AAX0.d	= (D[3..0] == B"1101");
+	-- Write to AMP registers 08,09,0A
+	AY_AAX1.d	= (D[3..0] == B"1000") or (D[3..0] == B"1001") or (D[3..0] == B"1010");
+
+	-- reset signal for form generator
+--	AY_F_RES	= DFF(VCC,DFF((!((AY_DO[7..5] == B"111") & AY_CCC1 & !AY_DO0) or AY_F_RES),CLK42,,),LCELL(!(AY_AAX0 or (AY_AAX1 & BD4)) or BWR),);
+
+--	AY_F_R1		= DFF((!(AY_AAX0 or (AY_AAX1)) or BWR),CLK42,,);
+	AY_F_R1		= DFF((!AY_AAX0 or BWR),CLK42,,);
+	AY_F_RES	= DFF(DFF(VCC,AY_CCC7,AY_F_R1,),AY_CCC7,AY_F_R1,);
+
+	AY_X_[].prn	= VCC;
+
+--  	AY_GF[3..0].clrn = /RESET;
+--  	AY_GF[3..0].clk	 = AY_D_WR;
+--		AY_GF[3..0].ena = AY_ADR[] == B"XXXX1101";
+--		AY_GF[3..0].d  = D[3..0];
+
+	AY_DAT_WR.clk	= CLK42;
+
+	CASE AY_CCC[1..0] IS
+		WHEN B"00" =>
+			AY_AX[]		= (VCC,GND,AY_CCC[7..2]);	-- CMD adress
+			AY_WR		= GND;
+			AY_DI[]		= AY_DAT[];
+
+			AY_DAT_WR	= VCC;
+
+		WHEN B"01" =>
+			AY_AX[]		= (B"0000",AY_ADR[3..0]);
+			AY_WR		= !BWR;
+			AY_DI[]		= BD[];
+
+			AY_DAT_WR	= VCC;
+
+		WHEN B"1X" =>
+			AY_AX[] 	= (GND,GND,GND,AY_DO[4..0]);
+			AY_DAT_WR	= AY_DO6;
+			AY_WR		= !LCELL(!(AY_DO[7..5] == B"010") &
+								!((AY_DO[7..5] == B"110") & AY_CXX));
+--								!((AY_DO[7..5] == B"110") & AY_CX));
+			AY_DI[]		= AY_DAT[];
+	END CASE;
+
+	AY_DD[].clk	= CLK42;
+	AY_DD[].ena	= !AY_CCC1 & !AY_CCC0;
+	AY_DD[]	= AY_DO[];
+
+	AY_DO[] = lpm_ram_dq(AY_DI[],AY_AX[],AY_WR,CLK42,CLK42)
+		WITH (lpm_width=8,lpm_widthad=8,lpm_file="AY.MIF");
+
+--	AY_CX.prn	= !DFF((((AY_DO[7..5] == B"00X") & AY_CCC1) & (!AY_DO5 or AY_C)),CLK42,,);
+	AY_CX.prn	= !DFF(((AY_DO[7..5] == B"000") & AY_CCC1),CLK42,,);
+	AY_CXX.prn	= !DFF(((AY_DO[7..5] == B"000") & AY_CCC1),CLK42,,);
+	AY_C.prn	= VCC;
+
+	AY_CX.clk	= CLK42;
+	AY_CXX.clk	= CLK42;
+	(AY_CXX.ena,AY_CX.ena)	= DFF((((AY_DO[7..5] == B"010") or (AY_DO[7..5] == B"111")) & AY_CCC1),CLK42,,);
+
+	IF DFF(((AY_DO[7..5] == B"010")),CLK42,,) THEN
+		AY_CX = (LCELL(AY_DAT[] == 0) & AY_CX);
+--		AY_CXX = (LCELL(AY_DAT[] == 0) & AY_CXX);
+--		AY_CX  = (LCELL(AY_DAT[] == 0) & AY_CX) or (AY_C & DFF(AY_DO0,CLK42,,));
+		AY_CXX = (LCELL(AY_DAT[] == 0) & AY_CXX) or (AY_C & DFF(AY_DO0,CLK42,,));
+	ELSE
+		AY_CXX = DFF(((!/RESET & AY_DO0) or (!AY_F_RES & !AY_DO0)),CLK42,,);
+		AY_CX  = DFF(((!/RESET & AY_DO0) or (!AY_F_RES & !AY_DO0)),CLK42,,);
+	END IF;
+
+	(AY_C.clk,AY_DAT[].clk)	= CLK42;
+	(AY_C.ena,AY_DAT[].ena)	= !DFF(AY_DAT_WR,CLK42,,);
+	(AY_C,AY_DAT[])	= (GND,AY_DO[]) - (B"00000000",DFF((DFF(!AY_DO5,CLK42,,) or (AY_C & DFF(AY_DO7,CLK42,,))),CLK42,,));
+
+	AY_OUT[].clk = CLK42;
+
+	AY_AMP[].clk = CLK42;
+	AY_AMP[] 	 = ((AY_DAT[3..0] or AY_DAT[4]) & (AY_AA[] or !AY_DAT[4]));
+
+	AY_DQ1[].clk = CLK42;
+	AY_OUTS1 	 = DFF(((AY_DO[7..0] == B"011XX001") & AY_CCC1),CLK42,,);
+	AY_OUT1.ena	 = AY_OUTS1;
+	AY_OUT1 	 = AY_CX xor AY_OUT1;
+	AY_DQ1[].ena = AY_OUTS1;
+	AY_DQ1[]	 = AY_AMP[] & LCELL((AY_OUT1 or AY_X_0) & (AY_X_3 or AY_SH0));
+
+	AY_DQ2[].clk = CLK42;
+	AY_OUTS2 	 = DFF(((AY_DO[7..0] == B"011XX010") & AY_CCC1),CLK42,,);
+	AY_OUT2.ena	 = AY_OUTS2;
+	AY_OUT2 	 = AY_CX xor AY_OUT2;
+	AY_DQ2[].ena = AY_OUTS2;
+	AY_DQ2[] 	 = AY_AMP[] & LCELL((AY_OUT2 or AY_X_1) & (AY_X_4 or AY_SH0));
+
+	AY_DQ3[].clk = CLK42;
+	AY_OUTS3 	 = DFF(((AY_DO[7..0] == B"011XX011") & AY_CCC1),CLK42,,);
+	AY_OUT3.ena	 = AY_OUTS3;
+	AY_OUT3 	 = AY_CX xor AY_OUT3;
+	AY_DQ3[].ena = AY_OUTS3;
+	AY_DQ3[] 	 = AY_AMP[] & LCELL((AY_OUT3 or AY_X_2) & (AY_X_5 or AY_SH0));
+
+	AY_OUTSX	 = DFF((((AY_DO[7..0] == B"011XX01X") or
+				   	 (AY_DO[7..0] == B"011XX0X1")) & AY_CCC1),CLK42,,);
+	AY_DQX[].clk = CLK42;
+	AY_DQX[].ena = AY_OUTSX;
+	AY_DQX[]	 = AY_AMP[] & AY_CH_MIX;
+
+	AY_DQX[].clrn = !AY_SH_Q;
+	AY_DQX[].prn = (B"0010") or !DFF((AY_SH_Q & BEEPER),CLK42,,);
+
+	AY_CH_MIX.clk = CLK42;
+	CASE AY_DO[1..0] IS
+		WHEN 0,1 => AY_CH_MIX = LCELL((AY_OUT1 or AY_X_0) & (AY_X_3 or AY_SH0));
+		WHEN 2 => AY_CH_MIX = LCELL((AY_OUT2 or AY_X_1) & (AY_X_4 or AY_SH0));
+		WHEN 3 => AY_CH_MIX = LCELL((AY_OUT3 or AY_X_2) & (AY_X_5 or AY_SH0));
+	END CASE;
+
+	AY_SH_Q		= DFF(((AY_DO[7..0] == B"011XX100") & AY_CCC1),CLK42,,);
+
+	AY_SH[].clk	 = CLK42;
+	AY_SH[].prn  = /RESET;
+	AY_SH[].ena	 = AY_SH_Q & AY_CXX;
+	AY_SH[] 	 = ((AY_SH3 xor AY_SH0),AY_SH[16..1]);
+
+	AY_VAR.clk	= CLK42;
+	AY_VX.clk	= CLK42;
+	AY_VA[].clk	= CLK42;
+
+	(AY_VAR.clrn,AY_VA[].clrn) = AY_F_RES;
+	AY_VX.clrn	= AY_F_RES;
+
+	(AY_VX.ena,AY_VA[].ena,AY_VAR.ena) = DFF(((AY_DO[7..0] == B"011XX101") & AY_CCC1 & !AY_BBLK & AY_CX),CLK42,,);
+	(AY_VX,AY_VA[],AY_VAR) = (AY_VX,AY_VA[],AY_VAR) + 1;
+
+	AY_X_[].clk	= CLK42;
+	AY_X_[].ena = DFF(((AY_DO[7..0] == B"011XX110") & AY_CCC1),CLK42,,);
+	AY_X_[] 	= AY_DAT[5..0];
+
+	AY_GF[].clk	= CLK42;
+	AY_GF[].ena	= DFF(((AY_DO[7..0] == B"011XX111") & AY_CCC1),CLK42,,);
+	AY_GF[]		= AY_DAT[3..0];
+
+	-- block count when 1-st period end
+	AY_BBLK		= DFF((AY_VX & (AY_GF0 or !AY_GF3)),CLK42,,); -- VA_COUNT_STOP
+
+	-- set ALL ZERO when 1-st period end
+	AY_ABLK		= DFF((!AY_GF3 & AY_VX),CLK42,,);
+
+	-- inverse 2-nd-s periods
+	AY_BINV		= DFF((AY_VX & ((AY_GF[] == B"1X10") or (AY_GF == B"1X01"))),CLK42,,);
+
+	-- inverse ALL
+	AY_AINV		= AY_GF2;
+
+	AY_AA[].clrn= VCC;
+	AY_AA[].clk	= CLK42;
+	AY_AA[].d	= (AY_VA[] xor AY_BINV xor !AY_AINV) & !AY_ABLK;
+
+%
+	AY_AA[].clrn= VCC;
+	AY_AA[].prn	= GND;
+	AY_AA[].clk	= CLK42;
+	AY_AA[]		= VCC;
+%
+
+	AY_CH_A[3..0].clk = AY_CCC7;
+	AY_CH_B[3..0].clk = AY_CCC7;
+	AY_CH_C[3..0].clk = AY_CCC7;
+
+	AY_CH_A[3..0] = AY_DQ1[3..0];
+	AY_CH_B[3..0] = AY_DQ2[3..0];
+	AY_CH_C[3..0] = AY_DQ3[3..0];
+
+	DO[7..0]	= AY_DD[];
+
+	AY_CH_CS[].clk	= CLK42;
 	CASE AY_DQX[] IS
-      WHEN 0 => AY_CH_CS[] = 0;
-      WHEN 1 => AY_CH_CS[] = 2;
-      WHEN 2 => AY_CH_CS[] = 4;
-      WHEN 3 => AY_CH_CS[] = 6;
-      WHEN 4 => AY_CH_CS[] = 8;
-      WHEN 5 => AY_CH_CS[] = 11;
-      WHEN 6 => AY_CH_CS[] = 16;
-      WHEN 7 => AY_CH_CS[] = 22;
-      WHEN 8 => AY_CH_CS[] = 32;
-      WHEN 9 => AY_CH_CS[] = 45;
-      WHEN 10 => AY_CH_CS[] = 64;
-      WHEN 11 => AY_CH_CS[] = 90;
-      WHEN 12 => AY_CH_CS[] = 127;
-      WHEN 13 => AY_CH_CS[] = 180;
-      WHEN 14 => AY_CH_CS[] = 255;
-      WHEN 15 => AY_CH_CS[] = 360;
-    END CASE;
+		WHEN 15 => AY_CH_CS[] = 360 ;
+		WHEN 14 => AY_CH_CS[] = 255 ;
+		WHEN 13 => AY_CH_CS[] = 180 ;
+		WHEN 12 => AY_CH_CS[] = 127 ;
+		WHEN 11 => AY_CH_CS[] = 90  ;
+		WHEN 10 => AY_CH_CS[] = 64  ;
+		WHEN 9  => AY_CH_CS[] = 45  ;
+		WHEN 8  => AY_CH_CS[] = 32  ;
+		WHEN 7  => AY_CH_CS[] = 22  ;
+		WHEN 6  => AY_CH_CS[] = 16  ;
+		WHEN 5  => AY_CH_CS[] = 11  ;
+		WHEN 4  => AY_CH_CS[] = 8   ;
+		WHEN 3  => AY_CH_CS[] = 6   ;
+		WHEN 2  => AY_CH_CS[] = 4   ;
+		WHEN 1  => AY_CH_CS[] = 2   ;
+		WHEN 0  => AY_CH_CS[] = 0   ;
+	END CASE;
 
--- AY stereo: 11-bit accumulators, TG42 rising, clear=!SUM_CLEAR_R.
--- Left enable=SUM_L_EN_R; right enable=SUM_R_EN_R. These are distinct slot FF.
-	AY_CH_LX[] = AY_CH_LX[] + (B"00",AY_CH_CS[]);
-	AY_CH_RX[] = AY_CH_RX[] + (B"00",AY_CH_CS[]);
+	AY_OUTS1X = DFF(AY_OUTS1,CLK42,,);
+	AY_OUTS2X = DFF((AY_OUTS2 or AY_SH_Q),CLK42,,);
+	AY_OUTS3X = DFF(AY_OUTS3,CLK42,,);
+
+	AY_OUTS1Y = DFF(AY_OUTS1 or AY_OUTS1X,CLK42,,);
+--	AY_OUTS2Y = DFF(AY_OUTS2 or AY_OUTS2X,CLK42,,);
+	AY_OUTS3Y = DFF(AY_OUTS3 or AY_OUTS3X,CLK42,,);
+
+	(AY_CH_LX[].clrn,AY_CH_RX[].clrn)	= !DFF((AY_CCC[7..2] == 0),CLK42,,);
+
+	(AY_CH_LX[],,) = LPM_ADD_SUB (,AY_CH_LX[],(B"00",AY_CH_CS[]),,,,)
+					WITH(LPM_WIDTH=11,LPM_REPRESENTATION="UNSIGNED");
+	(AY_CH_RX[],,) = LPM_ADD_SUB (,AY_CH_RX[],(B"00",AY_CH_CS[]),,,,)
+					WITH (LPM_WIDTH=11,LPM_REPRESENTATION="UNSIGNED");
 
 	AY_CH_LX[].clk	= CLK42;
 	AY_CH_RX[].clk	= CLK42;
-	AY_CH_LX[].ena	= SUM_L_EN_R;
-	AY_CH_RX[].ena = SUM_R_EN_R;
-	(AY_CH_LX[].clrn,AY_CH_RX[].clrn)	= !SUM_CLEAR_R;
+	AY_CH_LX[].ena = DFF(DFF((AY_OUTS1 or AY_OUTS1Y or AY_OUTS2X or AY_OUTS2),CLK42,,),CLK42,,);
+	AY_CH_RX[].ena = DFF(DFF((AY_OUTS3 or AY_OUTS3Y or AY_OUTS2X or AY_OUTS2),CLK42,,),CLK42,,);
 
-	AY_CH_VAL	= SAMPLE_VALID_R;
+	AY_CH_VAL	= DFF((AY_CCC[7..2] == B"111100"),CLK42,,);
+
+	AY_CH_L[].clk = AY_CH_VAL;
+	AY_CH_R[].clk = AY_CH_VAL;
 	AY_CH_L[] = AY_CH_LX[10..1];
 	AY_CH_R[] = AY_CH_RX[10..1];
 
---	AY_CH_A/B/C — dead-порты (TOP не подключает), драйв = GND
-	AY_CH_A[] = GND;
-	AY_CH_B[] = GND;
-	AY_CH_C[] = GND;
-
-	BIT_CLOCK_DELAY = AY_CCC2; -- existing internal CT2 delay, distinct from DAC pad FF
 END;
+

@@ -1,8 +1,8 @@
-INCLUDE "MOUSE_RX";
 
 	TITLE "DCP";
 
 INCLUDE "lpm_ram_dp";
+-- INCLUDE "DC_PORT2";
 
 SUBDESIGN dcp
 	(
@@ -11,21 +11,23 @@ SUBDESIGN dcp
 
 	/RES		: OUTPUT;
 
-	CT[5..0]	: INPUT;
-	CTH[5..0]	: INPUT;
-	XA0			: INPUT;
-	XA1			: INPUT;
-	XA2			: INPUT;
-	XA3			: INPUT;
-	C68			: INPUT;
+	CT[2..0]	: INPUT;
+
+	CONTINUE	: INPUT;
+	RAS			: OUTPUT;
+	CAS			: OUTPUT;
+	MC_END		: OUTPUT;
+	MC_BEGIN	: OUTPUT;
+	MC_TYPE		: OUTPUT;
+	MC_WRITE	: OUTPUT;
 
 	A[15..0]	: INPUT;
 	DI[7..0]	: INPUT;
-
-	DMUX[7..0]	: OUTPUT;
-	DOE			: OUTPUT;
+	DO[7..0]	: OUTPUT;
 	MA[11..0]	: OUTPUT;
+	MCA[1..0]	: OUTPUT;
 
+	TURBO_HAND	: INPUT;
 	CLK_Z80		: OUTPUT;
 	TURBO		: OUTPUT;
 
@@ -40,8 +42,7 @@ SUBDESIGN dcp
 	/IOM		: OUTPUT;
 	/IOMM		: OUTPUT;
 
-	MDX[15..0]	: INPUT;
-	CA[15..0]	: INPUT;
+	MD[7..0]	: INPUT;
 	RA[17..14]	: OUTPUT;
 	PAGE[11..0]	: OUTPUT;
 
@@ -51,18 +52,20 @@ SUBDESIGN dcp
 	CS_RAM		: OUTPUT;
 	V_RAM		: OUTPUT;
 	PORT		: OUTPUT;
-	DOS			: OUTPUT;
+--	DOS			: OUTPUT;
+	DOS			: INPUT;
 
 	WR_DWG		: OUTPUT;
 
+	WR_TM9		: OUTPUT;
 	WR_AWG		: OUTPUT;
+	RD_KP11		: OUTPUT;
+	PORT_WRITE_CLK : OUTPUT; -- expose the existing port-clock LCELL for shared TOP consumers
+	KP11_MIX	: OUTPUT;
+
+	REFRESH		: INPUT;
 
 	G_LINE[9..0]: INPUT;
-	UCNT[7..0]	: INPUT;
-	ABAH[7..0]	: INPUT;
-	KDQ[7..0]	: INPUT;
-	AYDQ[7..0]	: INPUT;
-	AY_READ_CAPTURE_EN		: INPUT;
 	GA[9..0]	: OUTPUT;
 	GRAF		: OUTPUT;
 
@@ -70,1183 +73,746 @@ SUBDESIGN dcp
 	SP_SA		: OUTPUT;
 	SCR128		: OUTPUT;
 
+	TEST_R		: INPUT;
+
 	HDD_DATA	: OUTPUT;
 	HDD_FLIP	: OUTPUT;
 	RAM			: OUTPUT;
 	BLK_R		: OUTPUT;
 
+	PN4Q		: OUTPUT;
+
+	ACC_ON		: INPUT;	-- asselerator state - 1 - present
+
 	DCPP[7..0]	: OUTPUT;
 
-	RDKMQ		: OUTPUT;
-	XACQ		: OUTPUT;
+	DOUBLE_CAS	: INPUT;
 
-	CSCH		: OUTPUT;
-	WEQ			: OUTPUT;
-	RASQ		: OUTPUT;
-	CASQ[3..0]	: OUTPUT;
-
-	VA_EN		: OUTPUT;
-	VW_STB		: OUTPUT;
-
-	MDOE		: OUTPUT;
-	MDQ[7..0]	: OUTPUT;
-	VDWQ[7..0]	: OUTPUT;
-	MCENDQ		: OUTPUT;
-	MTYPEQ		: OUTPUT;
-
-	ACC_RAM_SOURCE		: OUTPUT;
-	ACC_MD_COPY		: OUTPUT;
-	U0_ENA		: OUTPUT;
-	U1_ENA		: OUTPUT;
-	U2_ENA		: OUTPUT;
-	UCNT_SEL	: OUTPUT;
-	U_WRC7		: OUTPUT;
-	ACC_FRACTION_STEP_EN		: OUTPUT;
-	ACC_COUNT_LOAD_EN_R		: OUTPUT;
-	MD_READ_END_CLOCK		: OUTPUT;
-	ACC_CYCLE_N		: OUTPUT;
-	SCREEN_ROW6_XOR		: OUTPUT;
-
-	SOFT_COUNT_CLEAR_N		: OUTPUT;
-
-	KEY_RESET_INHIBIT_R		: OUTPUT;
-
-	KEY_READY_N_R		: OUTPUT;
-	CBL_ENABLE_R		: OUTPUT;
-
-	MA_PHASE[1..0] : OUTPUT;
-	XA_READ_PHASE : OUTPUT;
-	XA_HALF_CYCLE : OUTPUT;
-	VRAM_CAPTURE_A[7..0] : OUTPUT;
-	VRAM_CAPTURE_B[7..0] : OUTPUT;
-
-	ALL_MODE0_N : OUTPUT;
-
-	KB_RECEIVE_BITS[10..1] : INPUT;
-	KB_RECEIVE_COUNT_N[2..0] : INPUT;
-	KB_RX_CLOCK, KB_RX_DATA : OUTPUT;
- KB_ONE_TICK : INPUT;
-
-	MD_LOW_OUT[7..0] : OUTPUT;
-
-	TAPE_OUT, VIDEO_MODE0, XA_WRITE_ENA, XA_AUX_WRITE_ENA : OUTPUT;
-
-	BORDER_LATCH[4..0] : OUTPUT;
-	IO_WRITE_PHASE : OUTPUT;
-	KB_SCAN_COUNT[2..0] : OUTPUT;
-	KB_RELEASE, KB_EXT_PREFIX : INPUT;
-
-	IO_CYCLE_ACTIVE : OUTPUT;
-
-	CBL_READ_ADDR[7..0] : OUTPUT;
-)
+	)
 VARIABLE
 
- SERIAL_MOUSE : MOUSE_RX;
-    CTZQ : DFF;
+	CLK21		: NODE;
+
+--	DC			: DC_PORT2;
+
+	CLK84		: NODE;
+	CLK42X		: NODE;
+
+	CTZ[1..0]	: DFF;
+
+--	CT[2..0]	: DFF;
 
 	MEM			: LPM_RAM_DP WITH (LPM_WIDTH=16,LPM_WIDTHAD=8,LPM_FILE="DCP.MIF");
-    D[7..0] : NODE;
 
-    PORT_ADDR_D[7..0] : NODE;
+	D[7..0]		: NODE;
+	ADR8_MEM	: NODE;
+	MEM_D[15..0]: NODE;
+	MEM_WR		: NODE;
 
-    PORT_ADDR_R[7..0] : DFFE;
+	DCP_CX		: NODE;
+	SC_LCELL	: NODE;
 
-    PAGE_HOLD_R[7..0] : DFFE;
+	PG3[5..0]	: NODE;
+	PG0[5..0]	: NODE;
+	MPGS[7..0]	: LCELL;
+	PGS[7..0]	: DFF;
+--	PGS[7..0]	: NODE;
 
-    PDET : NODE;
+	PN[7..0]	: DFFE;
+	SC[7..0]	: DFFE;
+	SYS			: DFFE;
+	CNF[7..0]	: DFFE;
+	AROM16		: DFFE;
+	TB_SW		: DFFE;
 
-    PORT_CAPTURE_CLEAR_N : NODE;
+	CASH_ON		: NODE;
+	NMI_ENA		: NODE;
 
-    PORT_WRITE_END_CLOCK : NODE;
+	DD[7..0]	: DFFE;
+	STARTING	: NODE;
 
-    PN[7..0] : DFFE;
+--	DOS_		: NODE;
+--	DOS			: NODE;
+--	DOS_ON_		: NODE;
 
-    CNF[7..3] : DFFE;
+	MC_RQ		: NODE;
+	MC_END		: DFFE;
+	MC_BEGIN	: DFFE;
+	MC_TYPE		: DFFE;
+	MC_WRITE	: DFFE;
+	RAS			: DFFE;
+	CAS			: DFFE;
 
-    PORT_8F_R[4..0] : DFFE;
+	MA_[11..0]	: DFFE;
+	MCA[1..0]	: DFFE;
 
-    BORDER_R[4..0] : DFFE;
+	/IOM		: DFFE;
+	IOMM_STATE		: DFFE;
+	/IOMX		: DFFE;
+	/IOMY		: DFFE;
 
-    SYSTEM_PORT_R[2..0] : DFFE;
+	WT_CT[3..0]	: DFFE;
+	W_TAB[3..0]	: LCELL;
+	HDD_W[3..0]	: NODE;
+	/IO_WAIT	: NODE;
+	/MR_WAIT	: NODE;
 
-    PORT_CX_CLASS : NODE;
+	MEM_RW		: NODE;
+	IO_RW		: NODE;
+	IO_RWM		: NODE;
 
-    CNF_PORT_LOW : NODE;
+	MA_CT[1..0]	: DFFE;
 
-    PN_WRITE_EN : NODE;
+	WR_TM9_STATE		: DFFE;
+	RD_KP11_STATE		: DFFE;
 
-    CNF_WRITE_EN : NODE;
+	/RES		: NODE;
 
-    SYSTEM_PORT_WRITE_EN : NODE;
+	RFT			: DFF;
+	RFC			: DFFE;
 
-    VIDEO_MODE_WRITE_EN : NODE;
+	GRAF		: DFFE;
+	GRAF_X		: NODE;
+	GA[9..0]	: LCELL;
 
-    BORDER_WRITE_EN : NODE;
+	SP_SCR		: LCELL;
+	SP_SA		: LCELL;
 
-    ROM_PAGE_WRITE_EN : NODE;
+	HDD_FLIP	: DFFE;
+	/IOMZ		: DFFE;
 
-    XA_HALF_CYCLE_R : NODE;
+	HDD_DATA	: NODE;
+	HDD_ENA		: NODE;
 
-    XA_VSYNC_R : NODE;
+	BLK_C		: NODE;
+	/CASH		: NODE;
 
-    XA_LOW_HALF_ENABLE : NODE;
+	DCPP[7..0]	: DFFE;
 
-    CBL_PORT_WRITE_R : NODE;
+	PORTS_X		: NODE;
 
-    CBL_RATE_MODE_R : NODE;
+	NO_IO_WAIT	: NODE;
 
-    CBL_CA8_N : NODE;
+	DCP_RES		: NODE;
 
-    CBL_CA13_N : NODE;
+	HDD_A[3..0]	: DFF;
 
-    CBL_READ_TICK : NODE;
+	X_ADR[11..0]: LCELL;
+	X_MA_7, X_MA_5: LCELL;
 
-    cr_E6_3 : NODE;
+-- Early author address mux: memory/port phase and the I/O phase.
+	IO_STB : DFF; -- one-shot port flag, existing !/IO clock
+	IO_STB_CLEAR_N : DFF; -- b2aa existing registered clear/rearm state
+	GA_SEL : NODE;
+	MA_NEXT[11..0] : NODE;
+	MA_MUX_N0,MA_MUX_N1,MA_MUX_N2,MA_MUX_N3,MA_MUX_N4,MA_MUX_N6,MA_MUX_N8,MA_MUX_N9 : LCELL;
+	MA_INPUT_N0,MA_INPUT_N1,MA_INPUT_N2,MA_INPUT_N3,MA_INPUT_N4,MA_INPUT_N6,MA_INPUT_N8,MA_INPUT_N9 : LCELL; -- existing raw terminal copies
 
-    cr_E6_4 : NODE;
+	WR_AWGX		: NODE;
+	WR_AWG_STATE : DFFE; -- existing early toggle register, opposite phase of native lc_C16_2
 
-    cr_E13_4 : NODE;
+	/IOWR		: NODE;
 
-    SEQ_STB : NODE;
+	RA[17..14]	: LCELL;
 
-    BUS_STARTUP_RELEASE_R : NODE;
+--	SPR_[1..0]	: NODE;
+	SPR_[1..0]	: LCELL;
 
-    BUS_CYCLE_DONE_R : NODE;
+	SYS_ENA		: NODE;
 
-    MA_PHASE_H_R : NODE;
-
-    XA_READ_PHASE_R : NODE;
-
-    MA_PHASE_L_R : NODE;
-
-    IO_CYCLE_N_RESET_BUFFER : NODE;
-
-    IO_ACTIVE_R : NODE;
-
-    WAIT_TERM_R : NODE;
-
-    WAIT_UPPER_TERM_R : NODE;
-
-    IO_WAIT_STAGE_R : NODE;
-
-    WAIT_TERM_SLOT_R : NODE;
-
-    IO_READY_STAGE_R : NODE;
-
-    IOMYQ : NODE;
-
-    IOMZQ : NODE;
-
-    WAIT_CLEAR_N : NODE;
-
-    IO_CYCLE_N_DATA_BUFFER : LCELL;
-
-    IO_WRITE_PHASE_R : NODE;
-
-	VDWRAM		: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);
-    TURBO_N_R : NODE;
-
-    KEY_PREFIX_HIGH_ZERO_COPY : NODE;
-
-    KEY_CTRL_CODE_LOW : NODE;
-
-    KEY_COUNT_ONE : NODE;
-
-    KEY_F12_CODE_LOW : NODE;
-
-    KEY_SHIFT_R : NODE;
-
-    KEY_SHIFT_CODE : NODE;
-
-    KEY_CTRL_ALT : NODE;
-
-    KEY_ALT_R : NODE;
-
-    KEY_ALT_CODE_LOW : NODE;
-
-    KEY_NOT_EXTENDED : NODE;
-
-    KEY_RELEASE_CODE_HIGH : NODE;
-
-    KEY_EXT_CODE_HIGH : NODE;
-
-    DOSQ : NODE;
-
-    PAGE_ADDR_R[7..0] : DFFE;
-
-    MA_[11..0] : DFFE;
-
-    /RES : NODE;
-
-    GRAF : DFFE;
-
-    GRAF_X : NODE;
-
-    GA[9..0] : NODE;
-
-    GRF : NODE;
-
-    SP_SCR : NODE;
-
-    SP_SA : NODE;
-
-    HDD_FLIP : DFFE;
-
-    HDD_DATA : NODE;
-
-    HDD_ENA : NODE;
-
-    PORTS_X : NODE;
-
-    RAM : NODE;
-
-    BLK_R : NODE;
-
-    DCPP[7..0] : NODE;
-
-    BUS_SLOT_EN : NODE;
-
-    IO_CYCLE_N : NODE;
-
-    MA_VRAM_ROW_N : NODE;
-
-    MA_CPU_COLUMN_N : NODE;
-
-    MA_CPU_ROW_N : NODE;
-
-    IO_ADDRESS_R[2..0] : DFFE;
-
-    MA_PIN_BUFFER[9..0] : NODE;
-
-    WAIT_CT_R[3..0] : DFFE;
-
-    WAIT_COUNT[3..0], WAIT_SEED[3..0], WAIT_NEXT[3..0], WAIT_D[3..0],
-    WAIT_LOAD_N[3..0] : NODE;
-
-    DRAM_ROW_WORD[11..0], PERIPHERAL_WORD[11..0], DRAM_ADDR_WORD[11..0] : NODE;
-
-    CBL_PTR_R[7..0], CBL_DIV_R[2..0] : DFFE;
-
-    CBL_PTR_NEXT[7..0], CBL_DIV_NEXT[2..0] : NODE;
-
-    MD_HIGH_HOLD_R[7..0] : DFFE;
-
-    VDW_CPU_LANES[7..0] : NODE;
-
-    VDW_RAM_TERM[7..0] : NODE;
-
-    VDW_REPLAY_TERM[7..0] : NODE;
-
-    VDW_CPU_R[7..0] : DFFE;
-
-    VDW_MD_R[7..0] : DFFE;
-
-    VDW_WRITE_R[7..0] : DFFE;
-
-    VDW_RMW_INPUT[7..0], VDW_ADDRESS_WORD[7..0] : NODE;
-
-    VDW_ADDRESS[7..0] : NODE;
-
-    MD_READ_SWAP_R[7..0] : DFFE;
-
-    MD_SWAP_TERM[7..0] : NODE;
-
-    MD_LOW_TERM[7..0] : NODE;
-
-    MD_READ_R[7..0] : DFFE;
-
-    AY_READ_R[7..0] : DFFE;
-
-    KEY_SCAN_R[2..0] : DFFE;
-
-    KEY_MATRIX_HIT_R[5..0] : DFFE;
-
-    CPU_READ_STAGE_R[7..0] : DFFE;
-
-    AY_PAGE_READ[7..0] : NODE;
-
-    AY_READ_PIN_LANES[7..0], PAGE_READ_LANES[7..0] : NODE;
-
-    CPU_MEMORY_SELECT[7..0] : NODE;
-
-    CPU_MEMORY_READ[7..0] : NODE;
-
-    CPU_BUS_READ[7..0] : NODE;
-
-    KEY_MOUSE_READ[7..0] : NODE;
-
-    MOUSE_READ_WORD[7..0], KEY_CBL_READ_WORD[7..0] : NODE;
-
-    PORT_MD_WORD[7..0] : NODE;
-
-    VDW_RAM_SELECT, VDW_CPU_SELECT, VDW_DIRECT_CPU_SELECT, VDW_CAPTURE_EN,
-    MD_READ_END_CLOCK, ACC_RAM_SOURCE, ACC_MD_COPY, ACC_CYCLE_N,
-    SCREEN_ROW6_XOR, VDW_LOGIC_MODE_R, VDW_XOR_AND_R, VDW_ADDRESS_FRACTIONAL_R,
-    MD_READ_HIGH_R, MD_SWAP_CLOCK, MD_SWAP_ENABLE, KEY_ROW_INACTIVE_R,
-    KEY_SCAN_CLEAR_N, CPU_READ_COMMAND_CLEAR, CPU_READ_CAPTURE_EN, BUS_BYTE_HIGH_R : NODE;
-
-    ACC_MODE_R[2..0] : DFFE;
-
-    MC_ACCESS_R[1..0] : DFFE;
-
-    PAGE_WRITE_PIPE_R[1..0] : DFFE;
-
-    MEMORY_SELECT_PIPE_R[1..0] : DFFE;
-
-    XA_RECEIVE_R[3..0] : DFFE;
-
-    PORT_CLASS_R[1..0] : DFF;
-
-    ISA_MAP_R : DFFE;
-
-    VIDEO_BANK_R : DFFE;
-
-    ROM_PAGE_LATCH_R : DFFE;
-
-    TURBO_PORT_N_R : DFFE;
-
-    DEFAULT_PAGE_WORD[7..0], GA_SOURCE_WORD[7..0], MD_LOW_WORD[7..0] : NODE;
-
-    CPU_BUS_READ_ENABLE, BUS_ACTIVE_CLEAR_N, IO_IDLE_SEEN_R, BUS_COMMAND_END_R,
-    BUS_COMMAND_BEGIN_R, BUS_DONE_FALL_R, PORT_CAPTURE_EN, REFRESH_SEEN_R,
-    REFRESH_ACTIVE_R, CAS_UPDATE_EN, RAS_N_R, CAS_N_R,
-    RAS_UPDATE_EN, GRAPHICS_MODE_CHANGE, BUS_COMPLETE_PHASE, BUS_COMPLETE_ENABLE,
-    MEMORY_WRITE_REQUEST, PAGE_GRAPHICS_MODE, VIDEO_WRITE_INHIBIT, PAGE_NO_WAIT_R,
-    PAGE_CACHE_INHIBIT_R, SOFT_RESET_PAGE_WINDOW, VIDEO_WRITE_STAGE_R, VIDEO_CAPTURE_INHIBIT,
-    VIDEO_WRITE_INACTIVE, VIDEO_CAPTURE_ENABLE, VIDEO_FULL_BYTE_INHIBIT, SCREEN_RAM_RANGE,
-    SCREEN_GRAPHICS_RANGE, SCREEN_PAGE_RANGE, CPU_MEMORY_RANGE, CPU_PAGE_SELECT_R,
-    CPU_UPPER_PAGE_RANGE, CPU_PAGE_SELECT, DEFAULT_PAGE_SELECT, MEMORY_READ_ENABLE,
-    XA_WRITE_PHASE, XA_WRITE_GATE_R, ADDRESS_WRITE_TOGGLE_R, MA_PHASE_RESTART,
-    MEMORY_WRITE_N, VDW_CPU_UPPER_ONES, VDW_CPU_LOWER_ONES, VDW_MD_UPPER_ONES,
-    VDW_MD_LOWER_ONES, VDW_CPU_ONES_R, VDW_MD_ONES_R, VDW_SELECTED_ONES,
-    VDW_RAM_WRITE_R, IO_READ_END_N, IO_STARTED_R, PORT_CAPTURE_PHASE_R,
-    PAGE_PN6_SELECT, BORDER_PORT_CLASS, ROM_PORT_LOW_A, ROM_PORT_LOW_B,
-    VIDEO_PORT_CLASS, ISA_MAP_WRITE_ENABLE, TURBO_WRITE_ENABLE, ROM_LATCH_WRITE_ENABLE,
-    PN_LOW_CLEAR_N, SYSTEM_CLEAR_N, PN_HIGH_CLEAR_N, PN5_CLEAR_N,
-    IO_NOT_READY, WAIT_TERMINAL, IO_READ_PARITY, PAGE_WRITE_PORT_CLASS,
-    PAGE_RAM_WRITE_R, CACHE_PORT_CLASS_N, CACHE_PORT_LOW_N, CACHE_WRITE_WINDOW_N,
-    CACHE_SELECT_N, ACC_PHASE_DELAY_R, ACC_PHASE_RISE, ACC_CYCLE_DELAY_N_R,
-    ACC_COUNT_RUN_MODE, ACC_MEMORY_PHASE_R, ACC_IO_DELAY_R, ACC_COUNT_WRITE_CLOCK,
-    ACC_FRACTION_ENABLE, ACC_COUNT_PORT_CLASS_N, ACC_COUNT_PORT_N_R, ACC_LINE_PORT_UPPER_N,
-    ACC_LINE_PORT_LOWER_N, ACC_LINE_WRITE_N_R, ACC_LINE_MODE, ACC_ADDRESS_MODE,
-    ACC_LINE_ENABLE, ACC_COUNT_ENABLE, ACC_ADDRESS_ENABLE, ROM_WRITE_PORT_UPPER_N,
-    ROM_WRITE_PORT_LOWER_N, ROM_WRITE_CLOCK, CPU_IO_PORT_RANGE, ACC_MEMORY_PHASE_ACTIVE_R,
-    ACC_MEMORY_CLEAR_N, ACC_FETCH_INHIBIT, BUS_WORD_HIGH_R, CAS_SELECT0,
-    CAS_SELECT1, CAS_SELECT2, CAS_SELECT3, CAS_OUTPUT2,
-    ACC_COUNT_UPPER_NONZERO, ACC_COUNT_LOWER_NOT_ONE, ACC_COUNT_WAIT_R, TURBO_WAIT_RANGE,
-    TURBO_WAIT_CLEAR_R, CPU_WAIT_ASSERT, IO_WAIT_PENDING_R, IO_WAIT_RELEASE,
-    REFRESH_WAIT_INHIBIT, MEMORY_WAIT_DONE_R, MEMORY_WAIT_PENDING, KEY_MOUSE_READ_INHIBIT,
-    KEY_MOUSE_READ_N, XA_WRITE_STAGE0_R, XA_WRITE_STAGE1_R, XA_SELECT_N_R,
-    ACC_OPCODE_EQUALITY, ACC_MODE_CAPTURE_R, ACC_MODE_CLEAR_N, ACC_STARTED_CLEAR_N,
-    ACC_STARTED_R, ACC_STARTED_DELAY_R, ACC_COUNT_LOAD_MODE, ACC_COUNT_LOAD_EN_R,
-    ACC_MODE_BIT0, ACC_MODE_ACTIVE, SCREEN_PAGE_HIGH, ACC_FETCH_CLEAR_N,
-    ACC_FETCH_PENDING_R, ACC_FETCH_BLOCK_R, CPU_PREFIX_HIGH_BITS, CPU_BLOCK_OPCODE_BITS,
-    CPU_PREFIX_LOW_BITS, CPU_LOGIC_OPCODE_BITS, CPU_M1_R, CPU_OPCODE_CAPTURE_EN,
-    CPU_BLOCK_OPCODE_R, CPU_PREFIX_R, CPU_ED_OPCODE_BITS, CPU_RETI_OPCODE_BITS,
-    CPU_ED_PREFIX_R, CPU_RETI_R, CPU_ACC_OPCODE_CLASS, MODE_PORT_UPPER,
-    MODE_PORT_LOWER, MODE_PORT_WRITE_R, ALL_MODE_N_R, KEY_READY_N_R,
-    KEY_MATRIX_CLEAR_N, CPU_FETCH_CLOCK, DOS_R, DOS_ENTRY_ADDRESS,
-    DOS_ENTRY_ENABLE, ROM_READ_INHIBIT, IO_OR_PAGE_WRITE, PAGE_WRITE_RANGE,
-    PAGE_ROM_RANGE, MEMORY_READ_INACTIVE, ROM_LOW_ENABLE, ROM_HIGH_ENABLE,
-    ROM_PAGE_BANK_SELECT, ROM_DOS_BANK_SELECT, ROM_BANK_PHASE, ROM_TRDOS128_RANGE,
-    ROM_DOS_RANGE, ROM_TRDOS_BANK, ROM_SYSTEM128_RANGE, ROM_SYSTEM48_RANGE,
-    ROM_LOW_READ, ROM_A15_DOS, ROM_A14_DOS, ROM_MAPPED_READ,
-    ROM_HIGH_BANK_SELECT, ROM_A17_BUFFER, ROM_A14_SELECT, ROM_A15_PAGE,
-    ROM_A14_PAGE, ROM_A16_SELECT, ROM_A15_SELECT, ROM_PAGE_ENABLE_R,
-    CPU_DATA_IDLE_R, ROM_REFRESH_INHIBIT, ROM_CHIP_SELECT, PAGE_DEFAULT5,
-    PAGE_DEFAULT4, ROM_MAP_R, PAGE_CPU_BANK_SELECT, PAGE_DEFAULT3,
-    PAGE_DOS_PHASE, PAGE_CPU_PN_SELECT, PAGE_DEFAULT2, PAGE_CPU_LOW_PHASE,
-    PAGE_DEFAULT1, PAGE_CPU_UPPER_PHASE, PAGE_DEFAULT0, IDE_SWAP_RESTART_CLOCK,
-    IDE_SWAP_RESTART_R, IDE_SWAP_CLEAR_N, CPU_IO_N_R, KEY_ROW_HIGH_SELECT,
-    KEY_ROW_PAIR_SELECT_N, KEY_ROW_LOW_SELECT, IDE_PAGE_HIGH_ZERO_R, IDE_PAGE_CLASS,
-    IDE_SWAP_CLASS, IDE_PAGE_ACTIVE_R, IDE_BYTE_PHASE_R, IDE_BYTE_PHASE_NEXT,
-    CPU_READ_LOW_ONES, CBL_PORT_UPPER, CBL_PORT_MIDDLE, CBL_CA9_N,
-    CBL_FRAME_PHASE, KEY_CBL_MSB, KEY_PREFIX_HIGH_ZERO, KEY_CODE_HIGH_ZERO,
-    KEY_F12_N_R, KEY_CTRL_R, KEY_SHIFT_CODE_HIGH, KEY_RESET_CODE_HIGH,
-    KEY_TURBO_LATCH_R, KEY_ROM_BANK_R, VDW_LOGIC_OPCODE_BITS : NODE;
+	Z80_BASE_DIV : TFF;
+	MEM_END_HISTORY : DFF;
 
 BEGIN
--- DRAM sequencer and bus phases are concurrent hardware. MC_ACCESS_R
--- samples type/write together at SEQ_STB; RAS/CAS use separate phase enables.
--- Port capture, /MR instruction capture and derived XA clocks remain distinct.
--- OLD ACCELER mode000..111. Capture the self-load opcode low3 bits on /MR rising; /RESET and ALL_MODE clear the bank.
-ACC_MODE_R[].clk = /MR;
-ACC_MODE_R[].clrn = ACC_MODE_CLEAR_N;
-ACC_MODE_R[].ena = ACC_MODE_CAPTURE_R;
-ACC_MODE_R[] = DI[2..0];
--- DRAM access flags {write,type}; TG42 rising at SEQ_STB, async startup release. Both bits sample together.
-MC_ACCESS_R[].clk = CLK42;
-MC_ACCESS_R[].clrn = BUS_STARTUP_RELEASE_R;
-MC_ACCESS_R[].ena = SEQ_STB;
-MC_ACCESS_R[] = (MEMORY_WRITE_REQUEST & !BUS_COMMAND_END_R,!BUS_CYCLE_DONE_R & !BUS_COMMAND_END_R);
--- Two TG42 stages qualify page-RAM writes; enable and async controls remain independent from write strobe FF.
-PAGE_WRITE_PIPE_R[].clk = CLK42;
-PAGE_WRITE_PIPE_R[].ena = VCC;
-PAGE_WRITE_PIPE_R[] = (PAGE_WRITE_PIPE_R0,BUS_CYCLE_DONE_R & !/WR);
--- Memory-cycle selection pipeline, TG42 rising, async !/MR clear.
-MEMORY_SELECT_PIPE_R[].clk = CLK42;
-MEMORY_SELECT_PIPE_R[].clrn = !/MR;
-MEMORY_SELECT_PIPE_R[].ena = VCC;
-MEMORY_SELECT_PIPE_R[] = (MEMORY_SELECT_PIPE_R0,!BUS_COMMAND_END_R);
--- Four XA data bits sampled together on rising !XA_READ_PHASE_R, enabled in the low half-cycle. Sync-XA3 has a separate reset bank.
-XA_RECEIVE_R[].clk = !XA_READ_PHASE_R;
-XA_RECEIVE_R[].ena = XA_LOW_HALF_ENABLE;
-XA_RECEIVE_R[] = (XA3,XA2,XA1,XA0);
--- Port classes used by the keyboard/IDE and XA bus decoder.
-PORT_CLASS_R[].clk = CLK42;
-CASE PORT_ADDR_R[7..4] IS
-WHEN 2 => PORT_CLASS_R[] = B"11";
-WHEN 1 => PORT_CLASS_R[] = B"10";
-WHEN OTHERS => PORT_CLASS_R[] = B"00";
-END CASE;
--- Default page word for PN-overlay versus sampled port byte.
-IF PDET THEN PAGE_HOLD_R[] = (VCC,VCC,!PN7,VCC,PAGE_PN6_SELECT,PN[2..0]);
-ELSE PAGE_HOLD_R[] = PORT_ADDR_D[]; END IF;
-DEFAULT_PAGE_WORD[] = (VCC,VCC,PAGE_DEFAULT5,PAGE_DEFAULT4,PAGE_DEFAULT3,PAGE_DEFAULT2,PAGE_DEFAULT1,PAGE_DEFAULT0);
-IF DEFAULT_PAGE_SELECT THEN PAGE_ADDR_R[] = DEFAULT_PAGE_WORD[];
-ELSE PAGE_ADDR_R[] = PAGE_HOLD_R[] & BUS_CYCLE_DONE_R; END IF;
-IF GRAF THEN GA_SOURCE_WORD[] = G_LINE[7..0];
-ELSE GA_SOURCE_WORD[] = (MEM.q7,MEM.q2,MEM.q13,MEM.q1,A[13..10]); END IF;
-FOR bit IN 0 TO 7 GENERATE GA[bit] = LCELL(GA_SOURCE_WORD[bit]); END GENERATE;
-IF IDE_BYTE_PHASE_R & BUS_CYCLE_DONE_R THEN MD_LOW_WORD[] = MD_READ_SWAP_R[];
-ELSE MD_LOW_WORD[] = VDW_CPU_R[]; END IF;
-FOR bit IN 0 TO 7 GENERATE MD_LOW_OUT[bit] = LCELL(MD_LOW_WORD[bit]); END GENERATE;
+	/IOMM = IOMM_STATE;
+	WR_TM9 = WR_TM9_STATE;
+	RD_KP11 = RD_KP11_STATE;
 
- SERIAL_MOUSE.CLK42 = CLK42;
- SERIAL_MOUSE.SAMPLE_PHASE = CTH5;
- SERIAL_MOUSE.SERIAL_DATA = XA_RECEIVE_R[3];
- SERIAL_MOUSE.ADDR8 = CA8; SERIAL_MOUSE.ADDR10 = CA10;
+%
+	DC.CLK42	= CLK42;
+	DC./RESET	= /RESET;
 
-MD_HIGH_HOLD_R[].clk = MD_READ_END_CLOCK;
-MD_HIGH_HOLD_R[].ena = VCC;
-MD_HIGH_HOLD_R[] = MDX[15..8];
-VDW_CPU_LANES[] = (VDWQ7,VDWQ1,VDWQ5,VDWQ3,VDWQ6,VDWQ2,VDWQ4,VDWQ0);
-FOR bit IN 0 TO 7 GENERATE
-VDW_RAM_TERM[bit] = LCELL(VDW_RAM_SELECT & VDW_CPU_LANES[bit]);
-END GENERATE;
-FOR bit IN 0 TO 7 GENERATE
-VDW_REPLAY_TERM[bit] = LCELL((MD_HIGH_HOLD_R[bit] & ACC_MD_COPY & !VDW_RAM_SELECT) or (VDW_CPU_LANES[bit] & VDW_RAM_SELECT));
-END GENERATE;
+	DC.A[15..0]	= A[15..0];
 
-VDW_CPU_R[].clk = !CLK42;
-VDW_CPU_R[].ena = VDW_CAPTURE_EN;
-VDW_CPU_R[] = VDW_RAM_TERM[] or (DI[] & VDW_CPU_SELECT);
+	DC./IO		= /IO;
+	DC./WR		= /WR;
+	DC./M1		= /M1;
 
-VDW_MD_R[].clk = !CLK42;
-VDW_MD_R[].ena = VDW_CAPTURE_EN;
-VDW_MD_R[] = VDW_REPLAY_TERM[] or (DI[] & VDW_DIRECT_CPU_SELECT);
+--	DC./IOM;
+--	DC.IOMM_STATE;
+--	DC.DCP[7..0];
 
-VDW_WRITE_R[].clk = !CLK42;
-VDW_WRITE_R[].ena = VCC;
-CASE (VDW_LOGIC_MODE_R,VDW_XOR_AND_R) IS
-WHEN B"00" => VDW_WRITE_R[] = VDW_RMW_INPUT[];
-WHEN B"10" => VDW_WRITE_R[] = VDW_RMW_INPUT[] or VDWQ[];
-WHEN B"01" => VDW_WRITE_R[] = VDW_RMW_INPUT[] $ VDWQ[];
-WHEN B"11" => VDW_WRITE_R[] = VDW_RMW_INPUT[] & VDWQ[];
-END CASE;
-VDW_RMW_INPUT[] = (PORT_ADDR_D7,PORT_ADDR_D3,PORT_ADDR_D5,PORT_ADDR_D1,PORT_ADDR_D4,PORT_ADDR_D2,PORT_ADDR_D6,PORT_ADDR_D0);
-IF VDW_ADDRESS_FRACTIONAL_R THEN VDW_ADDRESS_WORD[] = ABAH[]; ELSE VDW_ADDRESS_WORD[] = UCNT[]; END IF;
-FOR bit IN 0 TO 7 GENERATE
-VDW_ADDRESS[bit] = LCELL(VDW_ADDRESS_WORD[bit]);
-END GENERATE;
+	DC.DOS		= DOS;
+	DC.CNF[1..0]= CNF[4..3];
 
-MD_READ_SWAP_R[].clk = MD_SWAP_CLOCK;
-MD_READ_SWAP_R[].ena = MD_SWAP_ENABLE;
-IF MD_READ_HIGH_R THEN MD_READ_SWAP_R[] = MDX[15..8];
-ELSE MD_READ_SWAP_R[] = DI[]; END IF;
-FOR bit IN 0 TO 7 GENERATE
-MD_SWAP_TERM[bit] = LCELL(IDE_BYTE_PHASE_R & IDE_PAGE_ACTIVE_R & !MEM.q6 & MD_READ_SWAP_R[bit]);
-END GENERATE;
-FOR bit IN 0 TO 7 GENERATE
-MD_LOW_TERM[bit] = LCELL((!IDE_BYTE_PHASE_R or !IDE_PAGE_ACTIVE_R) & MDX[bit] & !MEM.q6);
-END GENERATE;
+	DC.SYS		= SYS;
 
-MD_READ_R[].clk = !IO_WAIT_STAGE_R;
-MD_READ_R[].ena = VCC;
-MD_READ_R[] = MD_SWAP_TERM[] or (MEM.q6 & MDX[15..8]) or MD_LOW_TERM[];
+--	DC.PORT_X;
+%
 
-AY_READ_R[].clk = CLK42;
-AY_READ_R[].ena = AY_READ_CAPTURE_EN;
-AY_READ_R[] = AYDQ[];
 
-KEY_SCAN_R[].clk = CLK42;
-KEY_SCAN_R[].clrn = !CPU_IO_N_R;
-KEY_SCAN_R[].ena = VCC;
-KEY_SCAN_R[] = KEY_SCAN_R[] + 1;
+--	==============================================================
+%
+	CT[].clk	= CLK42;
 
-KEY_MATRIX_HIT_R[].clk = CLK42;
-KEY_MATRIX_HIT_R[].clrn = KEY_SCAN_CLEAR_N;
-KEY_MATRIX_HIT_R[].ena = VCC;
-KEY_MATRIX_HIT_R[] = KEY_MATRIX_HIT_R[] or (!KEY_ROW_INACTIVE_R & !(KDQ7,KDQ5,KDQ4,KDQ2,KDQ1,KDQ0));
-
-CPU_READ_STAGE_R[].clk = !CLK42;
-CPU_READ_STAGE_R[].clrn = (VCC, VCC, VCC, !CPU_READ_COMMAND_CLEAR, !CPU_READ_COMMAND_CLEAR, VCC, VCC, VCC);
-CPU_READ_STAGE_R[].ena = CPU_READ_CAPTURE_EN;
-CPU_READ_STAGE_R[] = PORT_ADDR_D[];
-FOR bit IN 0 TO 7 GENERATE
-AY_PAGE_READ[bit] = LCELL((AY_READ_PIN_LANES[bit] & MEM.q6) or (PAGE_READ_LANES[bit] & !MEM.q6));
-END GENERATE;
-AY_READ_PIN_LANES[] = (AY_READ_R6,AY_READ_R2,AY_READ_R5,AY_READ_R1,AY_READ_R4,AY_READ_R0,AY_READ_R7,AY_READ_R3);
-PAGE_READ_LANES[] = (MEM.q14,MEM.q5,MEM.q3,MEM.q11,MEM.q7,MEM.q2,MEM.q13,MEM.q1);
-FOR bit IN 0 TO 7 GENERATE
-CPU_MEMORY_SELECT[bit] = LCELL((MD_READ_R[bit] & MEM.q0 & MEM.q9) or (KEY_MOUSE_READ[bit] & !MEM.q9) or (!MEM.q0 & !MEM.q9));
-END GENERATE;
-FOR bit IN 0 TO 7 GENERATE
-CPU_MEMORY_READ[bit] = LCELL(CPU_MEMORY_SELECT[bit] or (!MEM.q0 & AY_PAGE_READ[bit] & MEM.q9));
-END GENERATE;
-FOR bit IN 0 TO 7 GENERATE
-CPU_BUS_READ[bit] = LCELL((/IO & CPU_READ_STAGE_R[bit]) or (!/IO & CPU_MEMORY_READ[bit]));
-END GENERATE;
-FOR bit IN 0 TO 7 GENERATE
-KEY_MOUSE_READ[bit] = LCELL((MOUSE_READ_WORD[bit] & MEM.q6) or (KEY_CBL_READ_WORD[bit] & !MEM.q6));
-END GENERATE;
-MOUSE_READ_WORD[] = SERIAL_MOUSE.READ_BYTE[];
-KEY_CBL_READ_WORD[] = (KEY_CBL_MSB,XA_RECEIVE_R[2],CBL_FRAME_PHASE,!KEY_MATRIX_HIT_R[5],!KEY_MATRIX_HIT_R[2],!KEY_MATRIX_HIT_R[3],!KEY_MATRIX_HIT_R[0],!KEY_MATRIX_HIT_R[4]);
-IF BUS_BYTE_HIGH_R THEN PORT_MD_WORD[] = MDX[15..8]; ELSE PORT_MD_WORD[] = MDX[7..0]; END IF;
-FOR bit IN 0 TO 7 GENERATE PORT_ADDR_D[bit] = LCELL(PORT_MD_WORD[bit]); END GENERATE;
-
-    CBL_PTR_R[].clk = !CTH2; CBL_PTR_R[].ena = VCC;
-    CBL_PTR_R[].clrn = CBL_ENABLE_R; CBL_PTR_R[].prn = VCC;
-    IF CBL_READ_TICK THEN CBL_PTR_NEXT[] = CBL_PTR_R[].q + 1;
-    ELSE CBL_PTR_NEXT[] = CBL_PTR_R[].q; END IF;
-    CBL_PTR_R[].d = CBL_PTR_NEXT[];
-
-    CBL_READ_ADDR[] = CBL_PTR_R[].q;
-
-    CBL_DIV_R[].clk = !CTH2; CBL_DIV_R[].ena = VCC;
-    CBL_DIV_R[].clrn = VCC; CBL_DIV_R[].prn = VCC;
-    CASE (CBL_RATE_MODE_R,CBL_DIV_R[].q) IS
-      WHEN 0 => CBL_DIV_NEXT[] = 5;
-      WHEN 1 => CBL_DIV_NEXT[] = 2;
-      WHEN 2 => CBL_DIV_NEXT[] = 0;
-      WHEN 3 => CBL_DIV_NEXT[] = 1;
-      WHEN 4 => CBL_DIV_NEXT[] = 3;
-      WHEN 5 => CBL_DIV_NEXT[] = 6;
-      WHEN 6 => CBL_DIV_NEXT[] = 4;
-      WHEN 7 => CBL_DIV_NEXT[] = 5;
-      WHEN 8 => CBL_DIV_NEXT[] = 4;
-      WHEN 9 => CBL_DIV_NEXT[] = 2;
-      WHEN 10 => CBL_DIV_NEXT[] = 0;
-      WHEN 11 => CBL_DIV_NEXT[] = 1;
-      WHEN 12 => CBL_DIV_NEXT[] = 3;
-      WHEN 13 => CBL_DIV_NEXT[] = 6;
-      WHEN 14 => CBL_DIV_NEXT[] = 4;
-      WHEN 15 => CBL_DIV_NEXT[] = 5;
-    END CASE;
-    CBL_DIV_R[].d = CBL_DIV_NEXT[];
-
-    CASE (MA_VRAM_ROW_N,MA_CPU_COLUMN_N,MA_CPU_ROW_N) IS
-      WHEN B"0XX" => DRAM_ROW_WORD[] = (GND,GND,GA[3..2],MEM.q[14],MEM.q[5],MEM.q[3],MEM.q[11],GA[7..4]);
-      WHEN B"10X" => DRAM_ROW_WORD[] = (GND,GND,GA[1..0],A[9..2]);
-      WHEN B"110" => DRAM_ROW_WORD[] = (GND,GND,PN[5],!DOSQ,/WR,A15,A14,A6,A5,A13,A7,A2);
-      WHEN B"111" => DRAM_ROW_WORD[] = (GND,GND,CNF[4],CNF[3],GND,VCC,B"000000");
-    END CASE;
-    CASE IO_CYCLE_N IS
-      WHEN 0 => PERIPHERAL_WORD[] = (IO_ADDRESS_R[2..0],MEM.q[10],MEM.q[14],MEM.q[5],
-                    (MEM.q[3]&IOMZQ),(MEM.q[11]&IOMYQ),/WR,MEM.q[2],A[6..5]);
-      WHEN 1 => PERIPHERAL_WORD[] = (IO_ADDRESS_R[2..0],B"00000",/WR,VCC,A[6..5]);
-    END CASE;
-    CASE MA_PHASE_H_R IS
-      WHEN 0 => DRAM_ADDR_WORD[] = DRAM_ROW_WORD[];
-      WHEN 1 => DRAM_ADDR_WORD[] = PERIPHERAL_WORD[];
-    END CASE;
-    MA_[0].d = !MA_PIN_BUFFER[0];
-    MA_[1].d = !MA_PIN_BUFFER[1];
-    MA_[2].d = DRAM_ADDR_WORD[2];
-    MA_[3].d = !MA_PIN_BUFFER[3];
-    MA_[4].d = !MA_PIN_BUFFER[4];
-    MA_[5].d = !MA_PIN_BUFFER[5];
-    MA_[6].d = !MA_PIN_BUFFER[6];
-    MA_[7].d = DRAM_ADDR_WORD[7];
-    MA_[8].d = !MA_PIN_BUFFER[8];
-    MA_[9].d = !MA_PIN_BUFFER[9];
-    MA_[10].d = DRAM_ADDR_WORD[10];
-    MA_[11].d = DRAM_ADDR_WORD[11];
-
-    WAIT_COUNT[] = WAIT_CT_R[].q;
-    WAIT_CT_R[].clk = CLK42; WAIT_CT_R[].ena = BUS_SLOT_EN;
-    WAIT_CT_R[].clrn = WAIT_CLEAR_N; WAIT_CT_R[].prn = VCC;
-    CASE (TURBO_N_R,MEM.q[0],MEM.q[9],MEM.q[6]) IS
-      WHEN 0 => WAIT_SEED[] = 13;
-      WHEN 1 => WAIT_SEED[] = 13;
-      WHEN 2 => WAIT_SEED[] = 13;
-      WHEN 3 => WAIT_SEED[] = 13;
-      WHEN 4 => WAIT_SEED[] = 8;
-      WHEN 5 => WAIT_SEED[] = 8;
-      WHEN 6 => WAIT_SEED[] = 5;
-      WHEN 7 => WAIT_SEED[] = 5;
-      WHEN 8 => WAIT_SEED[] = 13;
-      WHEN 9 => WAIT_SEED[] = 13;
-      WHEN 10 => WAIT_SEED[] = 14;
-      WHEN 11 => WAIT_SEED[] = 14;
-      WHEN 12 => WAIT_SEED[] = 14;
-      WHEN 13 => WAIT_SEED[] = 13;
-      WHEN 14 => WAIT_SEED[] = 5;
-      WHEN 15 => WAIT_SEED[] = 5;
-    END CASE;
-    CASE (IO_ACTIVE_R,WAIT_TERM_R) IS
-      WHEN B"0X" => WAIT_NEXT[] = !WAIT_LOAD_N[];
-      WHEN B"10" => WAIT_NEXT[] = WAIT_COUNT[] + 1;
-      WHEN B"11" => WAIT_NEXT[] = 15;
-    END CASE;
-
-    WAIT_D[] = WAIT_NEXT[];
-    WAIT_CT_R[].d = WAIT_D[];
-
-    MA_PIN_BUFFER[2] = GND; MA_PIN_BUFFER[7] = GND;
-    MA_PIN_BUFFER[0] = LCELL(!DRAM_ADDR_WORD[0]);
-    MA_PIN_BUFFER[1] = LCELL(!DRAM_ADDR_WORD[1]);
-    MA_PIN_BUFFER[3] = LCELL(!DRAM_ADDR_WORD[3]);
-    MA_PIN_BUFFER[4] = LCELL(!DRAM_ADDR_WORD[4]);
-    MA_PIN_BUFFER[5] = LCELL(!DRAM_ADDR_WORD[5]);
-    MA_PIN_BUFFER[6] = LCELL(!DRAM_ADDR_WORD[6]);
-    MA_PIN_BUFFER[8] = LCELL(!DRAM_ADDR_WORD[8]);
-    MA_PIN_BUFFER[9] = LCELL(!DRAM_ADDR_WORD[9]);
-	IO_CYCLE_ACTIVE = IO_ACTIVE_R;
-
-    BORDER_LATCH[] = BORDER_R[];
-    IO_WRITE_PHASE = IO_WRITE_PHASE_R;
-
-    KB_SCAN_COUNT[] = (KEY_SCAN_R[2],KEY_SCAN_R[1],KEY_SCAN_R[0]);
-
-    TAPE_OUT = LCELL(BORDER_R[3]);
-    VIDEO_MODE0 = VIDEO_BANK_R;
-    XA_WRITE_ENA = XA_WRITE_GATE_R;
-
-    XA_AUX_WRITE_ENA = DFFE(XA_WRITE_PHASE,CLK42,BUS_STARTUP_RELEASE_R,VCC,BUS_SLOT_EN);
-
-	KB_RX_CLOCK = XA_RECEIVE_R[0]; KB_RX_DATA = XA_RECEIVE_R[1];
-
-	ALL_MODE0_N = ALL_MODE_N_R;
-
-	KEY_MATRIX_CLEAR_N = LCELL(!/IO & ALL_MODE_N_R);
-
-	MA_PHASE[] = (MA_PHASE_H_R,MA_PHASE_L_R);
-	XA_READ_PHASE = XA_READ_PHASE_R;
-	XA_HALF_CYCLE = XA_HALF_CYCLE_R;
-	VRAM_CAPTURE_A[] = (VDW_CPU_R[7],VDW_CPU_R[6],VDW_CPU_R[5],VDW_CPU_R[4],VDW_CPU_R[3],VDW_CPU_R[2],VDW_CPU_R[1],VDW_CPU_R[0]);
-	VRAM_CAPTURE_B[] = (VDW_MD_R[7],VDW_MD_R[6],VDW_MD_R[5],VDW_MD_R[4],VDW_MD_R[3],VDW_MD_R[2],VDW_MD_R[1],VDW_MD_R[0]);
+	IF CT1 THEN
+		CT[1..0] 	= GND;
+		CT2			= !CT2;
+	ELSE
+		CT[1..0]	= CT[1..0]+1;
+		CT2			= CT2;
+	END IF;
+%
 
 	/RES	= DFFE(VCC,CLK42,,,CT0);
+--	==============================================================
 
-	TURBO	= !TURBO_N_R;
+--	TURBO	= DFFE((TB_SW & TURBO_HAND),CLK42,,/RESET,CLK_Z80);
+	TURBO	= DFF(DFFE((TB_SW & TURBO_HAND),CLK_Z80,,/RESET,!/RF),CLK42,,);
 
-	CTZQ.d	= (CTZQ & !CT1) or (!CTZQ & CT2 & CT1) or (CTZQ & !CT2);
-	CTZQ.clk	= CLK42;
+	CLK84	= CLK42 xor LCELL(CLK42X);
+	CLK42X	= DFF(!CLK42X,CLK84,,);
 
-	CLK_Z80	= DFF((CTZQ & TURBO_N_R) or (!TURBO_N_R & !CT0 & !CT2) or (!TURBO_N_R & CT0 & CT2),!CLK42,,);
+	CTZ[].clk	= CLK84 xor CTZ1;
+	CTZ[]	= CTZ[]+1;
 
-	BUS_SLOT_EN	= LCELL((CT2 & !CT0) or (!CT2 & CT0));
-	IO_CYCLE_N = IO_CYCLE_N_DATA_BUFFER;
+--	CLK_Z80	= CTZ1;
 
-	IO_CYCLE_N_DATA_BUFFER = /IO or !/M1;
+--	CLK_Z80	= DFF((!CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
+--	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
-	MA_VRAM_ROW_N	= LCELL(!IO_CYCLE_N or !MA_PHASE_L_R or MA_PHASE_H_R);
-	MA_CPU_COLUMN_N	= LCELL(!IO_CYCLE_N or MA_PHASE_L_R or MA_PHASE_H_R);
-	MA_CPU_ROW_N	= LCELL(IO_CYCLE_N or MA_PHASE_L_R or MA_PHASE_H_R);
+--	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);	-- Авторский ранний вариант: CT1&CT2 divider, отрицательный CLK21 turbo arm.
+	Z80_BASE_DIV.clk = CLK42;
+	Z80_BASE_DIV.t = CT2 & CT1;
+	CLK_Z80	= DFF((!CLK21 & TURBO) or (Z80_BASE_DIV & !TURBO),!CLK42,,);
+
+--	==============================================================
+	CLK21	= DFF((!CT0 xor CT2),CLK42,,);
+--	=== Adress Multiplexer =======================================
 
 	MA_[].clk	= CLK42;
-	MA_[].ena	= BUS_SLOT_EN;
+--	MA_[].ena	= (CT2 xor CT0);
+	MA_[].ena	= CLK21;
 
-	IO_ADDRESS_R[].clk	= CLK42;
-	IO_ADDRESS_R0.d = A[0] & ((!A[14] & !A[1]) or (A[2] & !A[1]) or (!A[2] & A[1]));
-	IO_ADDRESS_R1.d = (!A[1] & A[14] & A[2]) or (A[1] & !A[2]);
-	IO_ADDRESS_R2.d = (A[1] & A[14] & !A[2]) or (!A[1] & A[2]);
+	WR_TM9_STATE.clk	= CLK42;
+--	WR_TM9_STATE.ena	= (CT2 xor CT0);
+	WR_TM9_STATE.ena	= CLK21;
+	WR_TM9_STATE.prn	= /RES;
 
-	MA[]	= MA_[];
+	RD_KP11_STATE.clk	= !CLK42;
+--	RD_KP11_STATE.ena	= (CT2 xor CT0);
+	RD_KP11_STATE.ena	= CLK21;
+	RD_KP11_STATE.prn	= /RES;
+	RD_KP11_STATE.d	= !(MA_CT[] == 0);
+
+--	WR_AWGX		= DFF((WR_TM9_STATE or CLK21),!CLK42,,);
+--	WR_AWGX		= DFF(GND,!WR_TM9_STATE,,DFF(WR_AWGX,CLK42,,)); -- later author feedback pulse alternative
+	WR_AWG_STATE.clk = !CLK42;
+	WR_AWG_STATE.ena = VCC;
+	WR_AWG_STATE.prn = !WR_TM9_STATE; -- native raw toggle CLRN = physical XA-window Q
+	WR_AWG_STATE.d = !WR_AWG_STATE;
+	WR_AWGX = WR_AWG_STATE;
+
+--	WR_TM9_STATE	= (!MA_CT1 or (!IO_RW & !PORTS_X));
+--	WR_TM9_STATE	= (!MA_CT1 or (!/IO & !PORTS_X)); -- later donor gate
+	WR_TM9_STATE = (!MA_CT1 or (IO_STB & !PORTS_X));
+
+	WR_AWG		= WR_AWGX;
+
+	KP11_MIX	= TFF(VCC,RD_KP11_STATE,,);
+
+	WR_DWG		= !MC_BEGIN;
+--	WR_DWG		= DFF(!MC_BEGIN,CLK42,,);
+--	WR_DWG		= LCELL(!MC_BEGIN);
+
+--	MA_CT[].ena	= (CT2 xor CT0);
+	MA_CT[].ena	= CLK21;
+	MA_CT[].clk	= CLK42;
+
+	IF !LCELL(CT2 & !CT1) THEN
+		MA_CT[] = MA_CT[]+1;
+	ELSE
+		MA_CT[] = GND;
+	END IF;
+
+%
+	MA_[11..0]	bit0 - WG_A5
+				bit1 - WG_A6
+				bit2 - MUX_KP11, 0 - WG,CMOS	1 - KMPS,TM9
+				bit3 - RD/WR	 0 - WRITE		1 - READ
+				bit4 - CS_WG93 or WR_TM9_STATE
+				bit5 - HDD/CMOS strobe
+				bit7,6	- 	00 - not
+							01 - ????
+							10 - HDD1/2
+							11 - CMOS
+				bit8 - HDD CS1/CS3 or CMOS data/adr
+				bit9,10,11 - HDD_A[2..0]
+%
+	CASE A[15..14] IS
+		WHEN 0 => SP_SCR = GND;		SP_SA = GND;
+		WHEN 1 => SP_SCR = !GRAF;	SP_SA = GND;
+		WHEN 2 => SP_SCR = GND;		SP_SA = PG3[1];
+		WHEN 3 => SP_SCR = !GRAF & LCELL(PG3[] == B"1101X1"); SP_SA = PG3[1];
+	END CASE;
+
+	CASE GRAF IS
+		WHEN 0 => GA[] = (GND,GND,MEM.q[3..0],A[13..10]);
+--		WHEN 1 => GA[] = (VCC,(G_LINE[8..0] + (B"00000",A[13..10])));
+		WHEN 1 => GA[] = (VCC,G_LINE[8..0]);
+	END CASE;
+
+	CASE (!IO_STB,MA_CT0) IS
+		WHEN 0 => X_ADR[] = (GND,CNF4,PN5,DOS,/WR,A15,A14,A[6..5],A13,A7,A[2]);
+		WHEN 1 => X_ADR[] = (GND,GND,CNF[4..3],B"01000000");
+		WHEN 2 => X_ADR[] = (GND,GA3,GA[1..0],A[9..2]);
+		WHEN 3 => X_ADR[] = (GND,GND,GA[3..2],MEM.q[7..4],GA[7..4]);
+	END CASE;
+
+--	R75: из X_MA_ живы только биты 7 и 5 (rev: X_MA_[0..4,6,8..11] мёртвы)
+	CASE !IO_STB IS
+		WHEN 0 => (X_MA_7, X_MA_5) = (MEM.q[7],(MEM.q[5] & !/IOMZ));
+		WHEN 1 => (X_MA_7, X_MA_5) = (GND,GND);
+	END CASE;
+%
+	CASE MA_CT1 IS
+--		WHEN 0 => MA_[] = X_ADR[];
+		WHEN 0 => MA_[] = (GND,X_ADR[10..0]);
+		WHEN 1 => MA_[] = (HDD_A[2..0],X_MA_[8..4],/WR,X_MA_[3],A[6..5]);
+	END CASE;
+%
+
+	-- Shared graphic-address mux GA[] above serves VIDEO and MA.
+	IO_STB.clk = !/IO;
+--	IO_STB.clrn = LCELL(!IO_STB or !/IO); -- BASE203 direct-clear alternative
+	IO_STB_CLEAR_N.clk = CLK42;
+	IO_STB_CLEAR_N.d = !IO_STB or !/IO;
+	IO_STB.clrn = IO_STB_CLEAR_N;
+	IO_STB.d = /M1;
+	GA_SEL = GRAF;
+
+	CASE MA_CT1 IS
+		WHEN 0 => MA_NEXT[] = (GND,GND,X_ADR[9..0]);
+		WHEN 1 =>
+			MA_NEXT[11..9] = HDD_A[2..0];
+			MA_NEXT[8..6] = MEM.q[8..6] & IO_STB;
+			MA_NEXT5 = MEM.q[5] & !/IOMZ & IO_STB;
+			MA_NEXT4 = MEM.q[4] & !/IOMY & IO_STB;
+			MA_NEXT3 = /WR;
+			MA_NEXT2 = !IO_STB or MEM.q[2];
+			MA_NEXT[1..0] = A[6..5];
+	END CASE;
+	-- Existing raw negative mux head and copy; author MA_NEXT CASE stays positive.
+	MA_MUX_N0 = !MA_NEXT[0];
+	MA_INPUT_N0 = MA_MUX_N0;
+	MA_[0].d = !MA_INPUT_N0;
+	MA_MUX_N1 = !MA_NEXT[1];
+	MA_INPUT_N1 = MA_MUX_N1;
+	MA_[1].d = !MA_INPUT_N1;
+	MA_MUX_N2 = !MA_NEXT[2];
+	MA_INPUT_N2 = MA_MUX_N2;
+	MA_[2].d = !MA_INPUT_N2;
+	MA_MUX_N3 = !MA_NEXT[3];
+	MA_INPUT_N3 = MA_MUX_N3;
+	MA_[3].d = !MA_INPUT_N3;
+	MA_MUX_N4 = !MA_NEXT[4];
+	MA_INPUT_N4 = MA_MUX_N4;
+	MA_[4].d = !MA_INPUT_N4;
+	MA_[5].d = MA_NEXT[5];
+	MA_MUX_N6 = !MA_NEXT[6];
+	MA_INPUT_N6 = MA_MUX_N6;
+	MA_[6].d = !MA_INPUT_N6;
+	MA_[7].d = MA_NEXT[7];
+	MA_MUX_N8 = !MA_NEXT[8];
+	MA_INPUT_N8 = MA_MUX_N8;
+	MA_[8].d = !MA_INPUT_N8;
+	MA_MUX_N9 = !MA_NEXT[9];
+	MA_INPUT_N9 = MA_MUX_N9;
+	MA_[9].d = !MA_INPUT_N9;
+	MA_[10].d = MA_NEXT[10];
+	MA_[11].d = MA_NEXT[11];
+	MA[] = MA_[];
+
+	MCA[].ena	= CT2 & CT1;
+	MCA[].clk	= CLK42;
+	MCA[]		= A[1..0];	-- adress for CAS
+
+	HDD_A[].clk	= CLK42;
+	CASE (A[14],A[2..0]) IS
+		WHEN 0 => HDD_A[] = 0;
+		WHEN 1 => HDD_A[] = 1;
+		WHEN 2 => HDD_A[] = 2;
+		WHEN 3 => HDD_A[] = 3;
+		WHEN 4 => HDD_A[] = 4;
+		WHEN 5 => HDD_A[] = 5;
+		WHEN 6 => HDD_A[] = 0;
+		WHEN 7 => HDD_A[] = 0;
+		WHEN 8 => HDD_A[] = 0;
+		WHEN 9 => HDD_A[] = 0;
+		WHEN 10 => HDD_A[] = 6;
+		WHEN 11 => HDD_A[] = 7;
+		WHEN 12 => HDD_A[] = 14;
+		WHEN 13 => HDD_A[] = 15;
+		WHEN 14 => HDD_A[] = 0;
+		WHEN 15 => HDD_A[] = 0;
+	END CASE;
+
+
+--	=== Memory Sinchronizer ======================================
+
+
+%          RF | MEM | RF
+		____  |     |   _______
+/MR		    \__________/
+			  |     |
+		 _____|     |   _______
+MC_BEGIN      \________/
+			  |		|__
+MC_END  ____________/  \_______
+		______      |__________
+MC_TYPE       \_____/
+			  |     |
+RAS		__    _    ___    __
+		  \__/|\__/ | \__/
+		    ____    _    __
+CAS		\__/  | \__/|\__/
+			  |		|
+
+%
+
+--	MC_RQ		= DFF(((/MR & DFF(/IO,CLK42,,)) or (/RD & /WR)),CLK42,,);
+
+--	MC_RQ		= DFF(((/MR & DFFE(GND,!CLK42,,!/IO,CT0)) or (/RD & /WR)),!CLK42,,);
+
+--	MC_RQ		= DFF((((/MR or !/RF) & DFF(/IO,CLK42,,/M1)) or (/RD & /WR)),CLK42,,);
+
+--	MC_RQ		= DFF((((/MR or !/RF) & IO_RW) or (/RD & /WR)),CLK42,,);
+
+--	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);
+
+	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);	-- rev-203: lc_E27_7 = DFFE(lc_E27_3 or (!lc_E27_1 & lc_C4_3), p183) — posedge
+--	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),!CLK42,,);
+
+	MC_BEGIN.clk= CLK42;
+	MC_BEGIN.ena= CT1 & CT2;
+	MC_BEGIN.d	= MC_RQ;
+	MC_BEGIN.prn= !(/MR & /IO);
+
+	MC_END.clk	= CLK42;
+	MC_END.d	= VCC;
+	MC_END.ena	= (CT0 & CT2) & !MC_BEGIN & CONTINUE & !BLK_C;
+	MC_END.clrn	= !(/MR & /IO);
+
+	MC_TYPE.clk	= CLK42;
+	MC_TYPE.ena	= CT1 & CT2;
+	MC_TYPE.d	= MC_RQ or MC_END;
+	MC_TYPE.prn	= /RES;
+
+	MC_WRITE.clk= CLK42;
+	MC_WRITE.ena= CT1 & CT2;
+	MC_WRITE.d	= MC_RQ or CS_RAM or /WR or MC_END;
+	MC_WRITE.prn= /RES;
+
+	RFT.clk		= REFRESH;
+	RFT.d		= GND;
+	RFT.prn		= RFC;
+--	RFT.prn		= VCC;
+
+	RFC.clk		= CLK42;
+	RFC.d		= !MC_RQ or RFT;
+--	RFC.d		= !MC_RQ;
+	RFC.ena		= CT1 & CT2;
+
+	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE))) & (!MC_TYPE or !RFC);
+	CAS.ena		= (!(CT1 or (CT0 xor !MC_TYPE))) & (!MC_TYPE or !RFC);
+--	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE)));
+--	CAS.ena		= (!(CT1 or (CT0 xor !MC_TYPE)));
+
+	RAS.clk		= CLK42;	CAS.clk		= CLK42;
+	RAS.d		= CT2;      CAS.d		= CT2 or BLK_C;
+
+	RAS.prn		= /RES;
+	CAS.prn		= /RES;
+--	CAS.prn		= !BLK_C;
+
+--	/MR_WAIT	= (MEM_RW or /CASH or DFF(MC_END,CLK42,!/MR,)) or (!TURBO & !ACC_ON);
+	MEM_END_HISTORY.clk = CLK42;
+	MEM_END_HISTORY.clrn = !/MR;
+	MEM_END_HISTORY.d = MC_END;
+	/MR_WAIT	= (MEM_RW or /CASH or MEM_END_HISTORY) or (!TURBO & !ACC_ON);
+
+	MEM_RW		= LCELL(/MR or !/RF);	-- rev-203: lc_C4_3 = LCELL(!p25 or p184) — комбинационный, FF нет
+
+	-- anti gluk!
+--	MEM_RW		= DFF(!/RF,!/MR,,LCELL(MEM_RW or !/MR));	-- rev-203: отдельного FF нет
+	IO_RWM		= !IO_STB;	-- rev-203: единственный флаг-FF lc_B33_6 (= IO_STB), IO_RWM-FF нет
+--	IO_RWM		= DFF(!/M1,!/IO,,LCELL(IO_RW or !/IO));
+
+	IO_RW		= DFF(/IO,CLK42,,/M1);
+
+	IOMM_STATE.clk	= CLK42;
+--	IOMM_STATE.ena	= CT0 xor CT2;
+	IOMM_STATE.ena	= CLK21;
+	IOMM_STATE.d		= !IO_STB or !MC_END or DFF((WT_CT[] == 0),CLK42,,); -- actual203 D proof IOMM_LOCAL014.json
+	IOMM_STATE.prn	= /RES;
+
+	/IOMX.clk	= CLK42;
+--	/IOMX.ena	= CT0 xor CT2;
+	/IOMX.ena	= CLK21;
+	/IOMX.d		= IOMM_STATE;
+	/IOMX.prn	= /RES;
+
+	/IOMY.clk	= CLK42;
+--	/IOMY.ena	= CT0 xor CT2;
+	/IOMY.ena	= CLK21;
+	/IOMY.d		= /IOMX or !MC_END or DFF((WT_CT[] == B"000X"),CLK42,,);
+--	/IOMY.prn	= /RES;
+	/IOMY.prn	= PORTS_X;
+
+	PORTS_X		= DFF(((DCPP[7..4] == B"0010") or (DCPP[7..4] == B"0001")),CLK42,,);
+
+	/IOMZ.clk	= CLK42;
+--	/IOMZ.ena	= CT0 xor CT2;
+	/IOMZ.ena	= CLK21;
+	/IOMZ.d 	= (A8 xor /RD) or /IOMX or !MC_END or DFF((WT_CT[] == B"000X"),CLK42,,);
+	/IOMZ.prn	= PORTS_X;
+
+	HDD_DATA	= DFF((HDD_ENA & DFF((MEM.q[11..8] == 0),CLK42,,) & PORTS_X),CLK42,,);
+	HDD_ENA		= (MEM.q[7..5] == B"101");
+
+	HDD_FLIP.clk	= /IOM;
+	HDD_FLIP.ena	= HDD_ENA & DFF((DCPP[] == B"0010XXXX"),CLK42,,);
+	HDD_FLIP.d		= !HDD_FLIP & (MEM.q[11..8] == 0);
+	HDD_FLIP.clrn	= /RESET & DFF(GND,!DOUBLE_CAS,,HDD_FLIP);
+
+	/IOM.clk	= CLK42;
+--	/IOM.ena	= CT0 xor CT2;
+	/IOM.ena	= CLK21;
+	/IOM.d		= (/IOMX & /IOM);
+	/IOM.prn	= !/IO & /M1;
+
+--	/IO_WAIT	= LCELL(/IO or !/M1 or DFF(DFFE((WT_CT[] == 0),CLK42,,,CLK21),CLK42,,NO_IO_WAIT));
+
+	/IO_WAIT	= LCELL(IO_RWM or DFF(DFFE((WT_CT[] == 0),CLK42,,,CLK21),CLK42,,NO_IO_WAIT));
+
+	NO_IO_WAIT	= !DFF(((A[7..0] == B"111XX1XX") & !TURBO & DOS),CLK42,,);
+
+	WT_CT[].clk	= CLK42;
+--	WT_CT[].ena	= (CT2 xor CT0);
+	WT_CT[].ena	= CLK21;
+--	WT_CT[].ena	= CT1;
+	WT_CT[].prn	= MC_END;
+
+	CASE (/IOM,DFF((WT_CT[] == 0),CLK42,,)) IS
+		WHEN B"1X" => WT_CT[].d	= W_TAB[];
+		WHEN B"00" => WT_CT[].d	= WT_CT[]-1;
+		WHEN B"01" => WT_CT[].d	= GND;
+	END CASE;
+
+	CASE (TURBO,MEM.q[14..12]) IS
+		WHEN 0 => W_TAB[] = 2;  WHEN  8 => W_TAB[] = 2;
+		WHEN 1 => W_TAB[] = 2;  WHEN  9 => W_TAB[] = 2;
+		WHEN 2 => W_TAB[] = 1;  WHEN 10 => W_TAB[] = 4;
+		WHEN 3 => W_TAB[] = 1;  WHEN 11 => W_TAB[] = 4;
+		WHEN 4 => W_TAB[] = 1;  WHEN 12 => W_TAB[] = 7;
+		WHEN 5 => W_TAB[] = 2;  WHEN 13 => W_TAB[] = 7;
+		WHEN 6 => W_TAB[] = 10; WHEN 14 => W_TAB[] = 10;
+--		WHEN 6 => W_TAB[] = 13; WHEN 14 => W_TAB[] = 13;
+		WHEN 7 => W_TAB[] = 10; WHEN 15 => W_TAB[] = 10;
+	END CASE;
+
+	CASE LCELL(MEM.q[11..8] == 0) IS
+		WHEN 0 => HDD_W[] = 10;	-- registers wait
+		WHEN 1 => HDD_W[] = 4;  -- datas wait
+	END CASE;
+
+	/WAIT		= (/IO_WAIT & /MR_WAIT);
+
+--	=== Other Devicese CASHE, ISA, ROM... ===
+
+--	when BLK_R = 1 => Other Devices stay Active!
 
 	BLK_R = DFF(  (LCELL((MEM.q7 & MEM.q6 & RAM) or
-				   (MEM.q7 & LCELL(A14 & A15 & PORT_8F_R[3]))) &
-				   !DFF(DFF(BUS_CYCLE_DONE_R,CLK42,,!/MR),CLK42,,!/MR)),!CLK42,!/MR,);
+				   (MEM.q7 & LCELL(A14 & A15 & SC4))) &
+				   !DFF(DFF(MC_RQ,CLK42,,!/MR),CLK42,,!/MR)),!CLK42,!/MR,);
 
-	RAM	= !LCELL(A14 or A15 or (PORT_8F_R[1] & CNF[3]));
+	/CASH = DFF((MEM.q[7..4] == 15),!CLK42,BLK_R,);
+--	/CASH = VCC;
 
-	GRAF_X		= LCELL(!MEM.q[3] & !MEM.q[14] & MEM.q[11] & MEM.q[5]);
+	RAM	= !LCELL(A14 or A15 or (SC0 & SYS));
+
+--	graf screen enable for pages
+
+	GRAF_X		= LCELL(MEM.q[7..4] == B"0101");
+
 	GRAF.clk	= CLK42;
 	GRAF.ena	= (CT0 & CT2);
 	GRAF.d 		= GRAF_X;
-	GRF			= LCELL(GRAF);
-	SCR128 = PN[3];
+
+	BLK_C 		= LCELL((GRAF_X xor GRAF) & !MC_TYPE);
+
+-----------------------------------------
+
+	SCR128		= PN3;
 
 	D[]			= DI[];
-	DCPP[]		= PORT_ADDR_R[];
+	-- when not IO - reset DCPP!
 
-	HDD_ENA		= (MEM.q[7..5] == B"101");
-	PORTS_X = PORT_CLASS_R[1];
-	HDD_DATA	= DFF((HDD_ENA & DFF((MEM.q[11..8] == 0),CLK42,,) & PORTS_X),CLK42,,);
+	DCP_RES		= DFF((STARTING & !/IO & /M1),CLK42,,);
 
-	HDD_FLIP.clk	= !BUS_CYCLE_DONE_R;
-	HDD_FLIP.ena	= HDD_ENA & DFF((PORT_ADDR_R[] == B"0010XXXX"),CLK42,,);
-	HDD_FLIP.d		= !HDD_FLIP & (MEM.q[11..8] == 0);
-	HDD_FLIP.clrn	= /RESET & DFF(GND,!BUS_COMMAND_BEGIN_R,,HDD_FLIP);
+	DCPP[].clk	= CLK42;
+	DCPP[].ena	= !DFF(MC_END,CLK42,,);
+	DCPP[].clrn	= MC_END & DCP_RES;	-- not in/out when START
+	DCPP[].d	= MD[];
 
-	SEQ_STB		= LCELL(CT2 & CT1);
-	BUS_STARTUP_RELEASE_R		= DFFE(VCC, CLK42,,, CT0);
-	BUS_ACTIVE_CLEAR_N		= LCELL(!/MR or !/IO);
-	IO_IDLE_SEEN_R		= DFFE(VCC, CLK42, !/IO,,);
-	BUS_COMMAND_END_R		= DFFE((/WR & /RD) or (!IO_IDLE_SEEN_R & /MR), CLK42,,,);
-	BUS_COMMAND_BEGIN_R		= DFFE(!BUS_COMMAND_END_R, CLK42, BUS_ACTIVE_CLEAR_N,, SEQ_STB);
-	BUS_CYCLE_DONE_R		= DFFE(VCC, CLK42, BUS_ACTIVE_CLEAR_N,, BUS_COMPLETE_ENABLE);
-	BUS_DONE_FALL_R		= DFFE(BUS_CYCLE_DONE_R, !CLK42,,,);
-	PORT_CAPTURE_EN		= LCELL(!BUS_DONE_FALL_R);
-	REFRESH_SEEN_R		= DFFE(VCC, CT5, REFRESH_ACTIVE_R,,);
+--	DD[].clk	= !CLK42;
+--	DD[].ena	= !DFF(MC_END,!CLK42,,);
 
-	REFRESH_ACTIVE_R		= DFFE(!BUS_COMMAND_END_R or !REFRESH_SEEN_R, CLK42,,, SEQ_STB);
-	CAS_UPDATE_EN		= LCELL((!REFRESH_ACTIVE_R & !CT1 & !MC_ACCESS_R[0] & !CT0) or (!CT1 & MC_ACCESS_R[0] & CT0));
-	RAS_N_R		= DFFE(!CT2, CLK42, BUS_STARTUP_RELEASE_R,, RAS_UPDATE_EN);
-	CAS_N_R		= DFFE(!GRAPHICS_MODE_CHANGE & !CT2, CLK42, BUS_STARTUP_RELEASE_R,, CAS_UPDATE_EN);
-	RAS_UPDATE_EN		= LCELL((!REFRESH_ACTIVE_R & !CT1 & !MC_ACCESS_R[0] & CT0) or (!CT1 & MC_ACCESS_R[0] & !CT0));
-	GRAPHICS_MODE_CHANGE		= LCELL((MC_ACCESS_R[0] & !PAGE_GRAPHICS_MODE & GRAF) or (MC_ACCESS_R[0] & PAGE_GRAPHICS_MODE & !GRAF));
-	BUS_COMPLETE_PHASE		= LCELL(!ACC_COUNT_WAIT_R & CT2 & CT0);
-	BUS_COMPLETE_ENABLE		= LCELL(BUS_COMMAND_BEGIN_R & !GRAPHICS_MODE_CHANGE & BUS_COMPLETE_PHASE);
-	MEMORY_WRITE_REQUEST		= LCELL(!/WR & !/MR & CPU_MEMORY_RANGE & !BUS_CYCLE_DONE_R);
-	PAGE_GRAPHICS_MODE		= LCELL(!MEM.q[3] & !MEM.q[14] & MEM.q[11] & MEM.q[5]);
-	VIDEO_WRITE_INHIBIT		= LCELL((!MEM.q[14] & !MEM.q[3] & MEM.q[11] & MEM.q[5]) & CASCADE((VDW_SELECTED_ONES & MEM.q[7]) or MEM.q[2]));
-	PAGE_NO_WAIT_R		= DFFE(MEM.q[3] & MEM.q[14] & MEM.q[11] & MEM.q[5], !CLK42, CPU_PAGE_SELECT_R,,);
-	PAGE_CACHE_INHIBIT_R		= DFFE(MEM.q[14] & MEM.q[11] & MEM.q[5], CLK42, CPU_PAGE_SELECT_R,,);
+	DD[].clk	= CLK42;
+	DD[].ena	= !DFF(MC_END,CLK42,,);
+	DD[].clrn	= MC_END & DCP_RES;
 
-	SOFT_RESET_PAGE_WINDOW		= LCELL((MEM.q[14] & !MEM.q[1] & !MEM.q[5])
-					& CASCADE(!/WR & CPU_PAGE_SELECT_R & !MEM.q[2] & !MEM.q[11]));
+	CASE LCELL(MD[7..4] == 15) IS
+		WHEN 0 => DD[].d = MD[];
+		WHEN 1 => DD[].d = (VCC,VCC,PG3[]);
+	END CASE;
 
-	SOFT_COUNT_CLEAR_N		= DFFE(!SOFT_RESET_PAGE_WINDOW or !MEM.q[3] or MEM.q[7] or MEM.q[13], CLK42,,,);
-	VIDEO_WRITE_STAGE_R		= DFFE(!CAS_N_R or VIDEO_FULL_BYTE_INHIBIT or !MC_ACCESS_R[1], CLK42,,,);
-	VIDEO_CAPTURE_INHIBIT		= LCELL(!VIDEO_WRITE_STAGE_R or (!SCREEN_GRAPHICS_RANGE & !GRF));
-	VIDEO_WRITE_INACTIVE		= LCELL(!CAS_N_R or !MC_ACCESS_R[1] or VIDEO_FULL_BYTE_INHIBIT or VIDEO_CAPTURE_INHIBIT);
-	VIDEO_CAPTURE_ENABLE		= LCELL(!VIDEO_WRITE_INACTIVE);
-	VIDEO_FULL_BYTE_INHIBIT		= LCELL((MEM.q[7] & !MEM.q[3]) & CASCADE(VDW_SELECTED_ONES & !MEM.q[14] & MEM.q[11] & MEM.q[5]));
-	SCREEN_RAM_RANGE		= LCELL((!GRAF & SCREEN_PAGE_RANGE & A[14]) or (!GRAF & !A[15] & A[14]));
-	SCREEN_GRAPHICS_RANGE		= LCELL((SCREEN_RAM_RANGE & !CA[13] & !G_LINE[6]) or (SCREEN_RAM_RANGE & !G_LINE[6] & G_LINE[7]));
-	SCREEN_PAGE_RANGE		= LCELL(!PN[7] & PN[2] & !PAGE_PN6_SELECT & PN[0]);
+--	=== Port Decoder =============================================
 
-	CPU_MEMORY_RANGE		= LCELL(A[14] or A[15] or (SYSTEM_PORT_R[0] & ISA_MAP_R));
-	CPU_PAGE_SELECT_R		= DFFE(MEMORY_SELECT_PIPE_R[1] & CPU_PAGE_SELECT, !CLK42, !/MR,,);
+	DCP_CX		= (DCPP[] == B"1100XXXX");
+	-- Ранние PN/SC/CNF: декод DCPP комбинационный, такт /IOWR отдельный.
+	SYS_ENA		= DCP_CX & (DCPP[] == B"XXXXX110");
 
-	CPU_UPPER_PAGE_RANGE		= LCELL(SYSTEM_PORT_R[2] & A[15] & A[14]);
-	CPU_PAGE_SELECT		= LCELL((CPU_UPPER_PAGE_RANGE & MEM.q[14]) or (!CPU_MEMORY_RANGE & MEM.q[5] & MEM.q[14]));
-	DEFAULT_PAGE_SELECT		= LCELL((IO_STARTED_R & /IO) or (!A[15] & /IO) or (/IO & !A[14]));
-	MEMORY_READ_ENABLE		= LCELL(!/MR & CPU_MEMORY_RANGE & !CPU_PAGE_SELECT_R);
-	XA_WRITE_PHASE		= LCELL((IO_CYCLE_N_DATA_BUFFER & MA_PHASE_H_R) or (MA_PHASE_H_R & PORT_CLASS_R[1]));
-	XA_WRITE_GATE_R		= DFFE(XA_WRITE_PHASE, CLK42, BUS_STARTUP_RELEASE_R,, BUS_SLOT_EN);
-	ADDRESS_WRITE_TOGGLE_R		= DFFE(!ADDRESS_WRITE_TOGGLE_R, !CLK42, XA_WRITE_GATE_R,,);
-	MA_PHASE_RESTART		= LCELL(CT2 & !CT1);
-	MA_PHASE_H_R		= DFFE((!MA_PHASE_RESTART & !MA_PHASE_L_R & MA_PHASE_H_R) or (!MA_PHASE_RESTART & MA_PHASE_L_R & !MA_PHASE_H_R), CLK42,,, BUS_SLOT_EN);
-	MA_PHASE_L_R		= DFFE(!MA_PHASE_RESTART & !MA_PHASE_L_R, CLK42,,, BUS_SLOT_EN);
-	XA_READ_PHASE_R		= DFFE(!MA_PHASE_H_R & !MA_PHASE_L_R, !CLK42, BUS_STARTUP_RELEASE_R,, BUS_SLOT_EN);
-	MD_READ_END_CLOCK		= LCELL(!IO_ACTIVE_R or /RD);
-	MEMORY_WRITE_N		= LCELL(!MC_ACCESS_R[1] or VIDEO_WRITE_INHIBIT or CPU_PAGE_SELECT_R);
+--	/IOWR		= DFF((/WR or /IO),CLK42,,!/IO);
+--	/IOWR		= LCELL(/IO or /WR or !/M1); -- later M1 mask alternative
+	/IOWR = LCELL(/IO or /WR);
+	PORT_WRITE_CLK = /IOWR;
 
-	VA_EN		= VIDEO_CAPTURE_ENABLE;
-	VW_STB		= !CAS_N_R;
-	WR_DWG		= BUS_COMMAND_BEGIN_R;
-	WR_AWG		= !ADDRESS_WRITE_TOGGLE_R;
+    CNF[].ena 	= SYS_ENA & DI2; CNF[].d = DI[];
+	AROM16.ena 	= SYS_ENA & !DI1; AROM16.d = DI0;
+	TB_SW.ena 	= SYS_ENA & DI1; TB_SW.d = DI0;
+	SYS.ena 	= SYS_ENA; SYS.d    = !A6;
 
-	WEQ			= MEMORY_WRITE_N;
-	RASQ		= !RAS_N_R;
-	MDOE		= LCELL((!/WR & !/IO & !MC_ACCESS_R[0]) or !MEMORY_WRITE_N);
-	MCENDQ		= XA_WRITE_GATE_R;
-	MTYPEQ		= MC_ACCESS_R[0];
+	SC[].ena 	= (DCP_CX & (DCPP[] == B"XXXXX000"))	;SC[].d   = DI[];
+	PN[].ena 	= (DCP_CX & (DCPP[] == B"XXXXX001"))	;PN[].d	  = DI[];
 
-	BUS_BYTE_HIGH_R		= DFFE(A0, CLK42,,, SEQ_STB);
+	TB_SW.clk	= /IOWR;
+	AROM16.clk	= /IOWR;
+	PN[].clk	= /IOWR;
+	SC[].clk	= /IOWR;
+	SYS.clk		= /IOWR;
+	CNF[].clk	= /IOWR;
 
-	VDW_CAPTURE_EN		= LCELL(!CAS_N_R);
-	VDW_RAM_SELECT		= LCELL(ACC_RAM_SOURCE & /IO);
-	VDW_CPU_SELECT		= LCELL(!VDW_RAM_SELECT);
-	VDW_DIRECT_CPU_SELECT		= LCELL(!ACC_MD_COPY & !VDW_RAM_SELECT);
+	AROM16.clrn		= /RESET;
+	TB_SW.prn		= /RESET;
+	SYS.clrn		= /RESET;
+	CNF[].clrn		= /RESET;
 
-	MDQ[7..0]	= (VDW_MD_R[7], VDW_MD_R[6], VDW_MD_R[5], VDW_MD_R[4], VDW_MD_R[3], VDW_MD_R[2], VDW_MD_R[1], VDW_MD_R[0]);
+	SC[].clrn		= /RESET & !CNF6;	-- Scorpion-OFF
 
-	VDW_CPU_UPPER_ONES		= LCELL(VDW_CPU_R[4] & VDW_CPU_R[6] & VDW_CPU_R[5]);
-	VDW_CPU_LOWER_ONES		= LCELL(VDW_CPU_R[0] & VDW_CPU_R[2] & VDW_CPU_R[1]);
-	VDW_MD_UPPER_ONES		= LCELL(VDW_MD_R[4] & VDW_MD_R[6] & VDW_MD_R[5]);
-	VDW_MD_LOWER_ONES		= LCELL(VDW_MD_R[0] & VDW_MD_R[2] & VDW_MD_R[1]);
-	VDW_CPU_ONES_R		= DFFE(VDW_CPU_UPPER_ONES & VDW_CPU_LOWER_ONES & VDW_CPU_R[7] & VDW_CPU_R[3], CLK42,,,);
-	VDW_MD_ONES_R		= DFFE(VDW_MD_LOWER_ONES & VDW_MD_UPPER_ONES & VDW_MD_R[7] & VDW_MD_R[3], CLK42,,,);
-	VDW_SELECTED_ONES		= LCELL((VDW_CPU_ONES_R & !BUS_BYTE_HIGH_R) or (VDW_MD_ONES_R & BUS_BYTE_HIGH_R));
+	PN[5..0].clrn	= /RESET & !CNF5;	-- reset PN5
+	PN[7..5].clrn	= /RESET & CNF7;	-- set Pentagon-512
 
-	VDW_LOGIC_OPCODE_BITS		= LCELL(!DI3 & !CPU_PREFIX_R);
-	VDW_LOGIC_MODE_R		= DFFE(VDW_LOGIC_OPCODE_BITS & !DI6 & DI7, /MR,,, CPU_OPCODE_CAPTURE_EN);
+	PN4Q	= PN4;
 
-	VDW_RAM_WRITE_R		= DFFE(!/RD & CT0 & ACC_MEMORY_PHASE_ACTIVE_R, CLK42,,,);
-	VDW_ADDRESS_FRACTIONAL_R		= DFFE(VCC, ACC_COUNT_WRITE_CLOCK, /RESET,,);
+--	====================================
 
-	VDWRAM.data[]		= (VDW_WRITE_R[7], VDW_WRITE_R[6], VDW_WRITE_R[5], VDW_WRITE_R[4], VDW_WRITE_R[3], VDW_WRITE_R[2], VDW_WRITE_R[1], VDW_WRITE_R[0]);
-	VDWRAM.wraddress[]	= (VDW_ADDRESS[7], VDW_ADDRESS[6], VDW_ADDRESS[5], VDW_ADDRESS[4], VDW_ADDRESS[3], VDW_ADDRESS[2], VDW_ADDRESS[1], VDW_ADDRESS[0]);
-	VDWRAM.rdaddress[]	= (VDW_ADDRESS[7], VDW_ADDRESS[6], VDW_ADDRESS[5], VDW_ADDRESS[4], VDW_ADDRESS[3], VDW_ADDRESS[2], VDW_ADDRESS[1], VDW_ADDRESS[0]);
-	VDWRAM.wren			= VDW_RAM_WRITE_R;
-	VDWRAM.wrclock		= CLK42;
-	VDWRAM.wrclken		= VCC;
-	VDWRAM.rden			= VCC;
-	VDWRAM.rdclock		= CLK42;
-	VDWRAM.rdclken		= VCC;
-	VDWQ[7..0]			= VDWRAM.q[];
+--	********** Pages decoder ***********
 
-	PDET		= LCELL(PORT_ADDR_D7 & PORT_ADDR_D6 & PORT_ADDR_D4 & PORT_ADDR_D5);
-	IO_READ_END_N		= LCELL(/RD or /IO);
-	IO_STARTED_R = DFFE(GND, VCC, /RESET, IO_READ_END_N, VCC);
-	PORT_CAPTURE_PHASE_R		= DFFE(IO_STARTED_R & !/IO & /M1, CLK42,,,);
-	PORT_CAPTURE_CLEAR_N		= LCELL(BUS_CYCLE_DONE_R & PORT_CAPTURE_PHASE_R);
+--	====================================
 
-	PORT_ADDR_R[].clk	= !CLK42;
-	PORT_ADDR_R[].clrn	= PORT_CAPTURE_CLEAR_N;
-	PORT_ADDR_R[].ena	= PORT_CAPTURE_EN;
-	PORT_ADDR_R[]		= PORT_ADDR_D[];
+	PG3[]		= (!PN7,VCC,LCELL((SC4 & !CNF7) or (CNF7 & PN6)),PN[2..0]);
 
-	PAGE_HOLD_R[].clk	= !CLK42;
-	PAGE_HOLD_R[].clrn	= PORT_CAPTURE_CLEAR_N;
-	PAGE_HOLD_R[].ena	= PORT_CAPTURE_EN;
+--	SC0,SC1,SYS,DOS,PN4,AROM16,CASH_ON,NMI_ENA
+	PG0[]		= (VCC,GND,
+				  LCELL(SC0 or !SYS or CASH_ON or !NMI_ENA),
+				  LCELL(((AROM16 & !(SC0 & SYS)) or (CASH_ON & NMI_ENA))),
+				  LCELL((SPR_1 & SC_LCELL) or !SYS or !NMI_ENA),
+				  LCELL((SPR_0 & SC_LCELL) or !SYS or !NMI_ENA));
 
-	PAGE_PN6_SELECT		= LCELL((CNF[7] & PN[6]) or (!CNF[7] & SYSTEM_PORT_R[2]));
+--	SC_LCELL	= LCELL(!(SC0 & SYS) & !CASH_ON);
+	SC_LCELL	= (!(SC0 & SYS) & !CASH_ON);
 
-	PORT_WRITE_END_CLOCK		= LCELL(/IO or /WR);
-	PN[].clk	= PORT_WRITE_END_CLOCK;	CNF[].clk	= PORT_WRITE_END_CLOCK;	PORT_8F_R[].clk	= PORT_WRITE_END_CLOCK;
-	BORDER_R[].clk	= PORT_WRITE_END_CLOCK;	SYSTEM_PORT_R[].clk	= PORT_WRITE_END_CLOCK;
-	ISA_MAP_R.clk	= PORT_WRITE_END_CLOCK;	VIDEO_BANK_R.clk	= PORT_WRITE_END_CLOCK;	ROM_PAGE_LATCH_R.clk	= PORT_WRITE_END_CLOCK;	TURBO_PORT_N_R.clk	= PORT_WRITE_END_CLOCK;
+	CASH_ON		= DFFE(A7,(/IO or /RD),/RESET,,DFF((DCPP[] == H"88"),CLK42,,));
+	NMI_ENA		= VCC;
 
-	PORT_CX_CLASS = LCELL(PORT_ADDR_R[7..4] == 12);
-	BORDER_PORT_CLASS	= LCELL(PORT_ADDR_R1 & !PORT_ADDR_R4 & PORT_ADDR_R6 & !PORT_ADDR_R5);
+	SPR_[]	= !SC1 & (DOS,(PN4 or !DOS));	-- expansion/dos/basic128/basic48
 
-	CNF_PORT_LOW = LCELL(PORT_ADDR_R[2..0] == 6);
-	ROM_PORT_LOW_A	= LCELL(PORT_ADDR_R1 & !PORT_ADDR_R0 & PORT_ADDR_R2);
-	ROM_PORT_LOW_B	= LCELL(PORT_ADDR_R1 & !PORT_ADDR_R0 & PORT_ADDR_R2);
-	VIDEO_PORT_CLASS	= LCELL(!PORT_ADDR_R1 & PORT_ADDR_R6 & !PORT_ADDR_R4 & !PORT_ADDR_R5);
+	-- Полная авторская early ROM table: OLD_AHDL/SP2000/DCP2.TDF.
+	CASE (SC1,PN4,DOS,SYS,AROM16,TEST_R) IS
 
-	PN_WRITE_EN = LCELL(PORT_CX_CLASS & (PORT_ADDR_R[2..0] == 1));
-	CNF_WRITE_EN	= LCELL(PORT_CX_CLASS & DI2 & CNF_PORT_LOW);
-	SYSTEM_PORT_WRITE_EN	= LCELL(!PORT_ADDR_R1 & PORT_CX_CLASS & !PORT_ADDR_R2 & !PORT_ADDR_R0);
-	VIDEO_MODE_WRITE_EN	= LCELL(VIDEO_PORT_CLASS & PORT_ADDR_R2 & PORT_ADDR_R7 & PORT_ADDR_R0);
-	ISA_MAP_WRITE_ENABLE	= LCELL(PORT_CX_CLASS & PORT_ADDR_R1 & PORT_ADDR_R2 & !PORT_ADDR_R0);
-	TURBO_WRITE_ENABLE	= LCELL(PORT_CX_CLASS & DI1 & ROM_PORT_LOW_A);
-	ROM_LATCH_WRITE_ENABLE	= LCELL(PORT_CX_CLASS & !DI1 & ROM_PORT_LOW_B);
-	BORDER_WRITE_EN	= LCELL(BORDER_PORT_CLASS & !PORT_ADDR_R0 & PORT_ADDR_R7 & !PORT_ADDR_R2);
-	ROM_PAGE_WRITE_EN	= LCELL((PORT_ADDR_R3 & PORT_ADDR_R1 & !PORT_ADDR_R4 & !PORT_ADDR_R5) & CASCADE(PORT_ADDR_R2 & PORT_ADDR_R0 & !PORT_ADDR_R6 & PORT_ADDR_R7));
-	PN_LOW_CLEAR_N	= LCELL(/RESET & !CNF[5]);
-	SYSTEM_CLEAR_N	= LCELL(/RESET & !CNF[6]);
-	PN_HIGH_CLEAR_N	= LCELL(CNF[7] & /RESET);
-	PN5_CLEAR_N	= LCELL((!CNF[5] & /RESET) or (CNF[7] & /RESET));
+		WHEN B"XXX00X" => RA[] = B"1000";
 
-	PN[].ena	= PN_WRITE_EN;
-	PN[0]		= DI0;	PN[1] = DI1;	PN[2] = DI2;	PN[3] = DI3;
-	PN[4]		= DI4;	PN[5] = DI5;	PN[6] = DI6;	PN[7] = DI7;
-	PN[7].clrn = PN_HIGH_CLEAR_N;	PN[6].clrn = PN_HIGH_CLEAR_N;
-	PN[5].clrn = PN5_CLEAR_N;
-	PN[4].clrn = PN_LOW_CLEAR_N;	PN[3].clrn = PN_LOW_CLEAR_N;	PN[2].clrn = PN_LOW_CLEAR_N;
-	PN[1].clrn = PN_LOW_CLEAR_N;	PN[0].clrn = PN_LOW_CLEAR_N;
-	CNF[].ena	= CNF_WRITE_EN;
-	CNF[7]		= DI7;	CNF[5] = DI5;	CNF[6] = DI6;	CNF[3] = DI3;	CNF[4] = DI4;
-	CNF[].clrn	= /RESET;
-	PORT_8F_R[].ena	= ROM_PAGE_WRITE_EN;
-	PORT_8F_R[0]		= DI0;	PORT_8F_R[1] = DI1;	PORT_8F_R[2] = DI2;	PORT_8F_R[3] = DI3;	PORT_8F_R[4] = DI4;
-	PORT_8F_R[].clrn	= /RESET;
-	BORDER_R[].ena	= BORDER_WRITE_EN;
-	BORDER_R[0]		= DI0;	BORDER_R[1] = DI1;	BORDER_R[2] = DI2;	BORDER_R[3] = DI3;	BORDER_R[4] = DI4;
+		WHEN B"XXX01X" => RA[] = B"0000";
 
-	SYSTEM_PORT_R[].ena	= SYSTEM_PORT_WRITE_EN;
-	SYSTEM_PORT_R[0]		= DI0;	SYSTEM_PORT_R[1] = DI1;	SYSTEM_PORT_R[2] = DI4;
-	SYSTEM_PORT_R[].clrn	= SYSTEM_CLEAR_N;
-	ISA_MAP_R.ena	= ISA_MAP_WRITE_ENABLE;	ISA_MAP_R = !A[6];	ISA_MAP_R.clrn = /RESET;
-	VIDEO_BANK_R.ena	= VIDEO_MODE_WRITE_EN;	VIDEO_BANK_R = DI0;	VIDEO_BANK_R.clrn = /RESET;
-	ROM_PAGE_LATCH_R.ena	= ROM_LATCH_WRITE_ENABLE;	ROM_PAGE_LATCH_R = DI0;	ROM_PAGE_LATCH_R.clrn = /RESET;
-	TURBO_PORT_N_R.ena	= TURBO_WRITE_ENABLE;	TURBO_PORT_N_R = !DI0;	TURBO_PORT_N_R.clrn = /RESET;
+		WHEN B"1XX10X" => RA[] = B"1000";
 
-	IO_NOT_READY		= LCELL(!IO_READY_STAGE_R);
-	IO_CYCLE_N_RESET_BUFFER		= LCELL(/IO or !/M1);
-	WAIT_CLEAR_N		= LCELL(BUS_CYCLE_DONE_R & !IO_CYCLE_N_DATA_BUFFER);
+		WHEN B"1XX11X" => RA[] = B"0000";
 
-	IO_ACTIVE_R		= DFFE((IO_ACTIVE_R & IO_NOT_READY) # !IO_NOT_READY, CLK42, !IO_CYCLE_N_RESET_BUFFER,, BUS_SLOT_EN);
+		WHEN B"0X01XX" => RA[] = B"1001";
 
-	WAIT_LOAD_N[3] = LCELL(!WAIT_SEED[3]);
+		WHEN B"0011X0" => RA[] = B"1010";
 
-	WAIT_LOAD_N[0] = LCELL(!WAIT_SEED[0]);
+		WHEN B"0111X0" => RA[] = B"1011";
 
-	WAIT_LOAD_N[2] = LCELL(!WAIT_SEED[2]);
+		WHEN B"0011X1" => RA[] = B"0010";
 
-	WAIT_LOAD_N[1] = LCELL(!WAIT_SEED[1]);
+		WHEN B"0111X1" => RA[] = B"0011";
 
-	WAIT_TERM_R		= DFFE(WAIT_CT_R[1] & WAIT_CT_R[3] & WAIT_CT_R[2] & WAIT_CT_R[0], CLK42,,,);
+	END CASE;
 
-	WAIT_UPPER_TERM_R		= DFFE(WAIT_CT_R[1] & WAIT_CT_R[3] & WAIT_CT_R[2], CLK42,,,);
-	WAIT_TERMINAL		= LCELL(WAIT_CT_R[1] & WAIT_CT_R[3] & WAIT_CT_R[2] & WAIT_CT_R[0]);
 
-	IO_WAIT_STAGE_R		= DFFE(!WAIT_TERM_R & !IO_CYCLE_N_DATA_BUFFER & BUS_CYCLE_DONE_R, CLK42, BUS_STARTUP_RELEASE_R,, BUS_SLOT_EN);
-	WAIT_TERM_SLOT_R		= DFFE(WAIT_TERMINAL, CLK42,,, BUS_SLOT_EN);
-	IO_READY_STAGE_R		= DFFE(IO_WAIT_STAGE_R, CLK42, BUS_STARTUP_RELEASE_R,, BUS_SLOT_EN);
+--	====================================
 
-	IO_READ_PARITY		= LCELL((!/RD & !A[8] & BUS_CYCLE_DONE_R) or (/RD & A[8] & BUS_CYCLE_DONE_R));
-	IOMYQ		= DFFE(!WAIT_UPPER_TERM_R & BUS_CYCLE_DONE_R & IO_READY_STAGE_R, CLK42, PORT_CLASS_R[1],, BUS_SLOT_EN);
-	IOMZQ		= DFFE(IO_READ_PARITY & !WAIT_UPPER_TERM_R & IO_READY_STAGE_R, CLK42, PORT_CLASS_R[1],, BUS_SLOT_EN);
+	CASE A[15..14] IS
+		WHEN 0 => MPGS[5..0] = PG0[];
+		WHEN 1 => MPGS[5..0] = B"101001"; 	%H"E9"%
+		WHEN 2 => MPGS[5..0] = B"101010"; 	%H"EA"%
+		WHEN 3 => MPGS[5..0] = PG3[];
+	END CASE;
+	MPGS[7..6]	= VCC;
 
-	PAGE_WRITE_PORT_CLASS		= LCELL(PORT_ADDR_R6 & IO_STARTED_R);
+	STARTING = DFF(GND,VCC,/RESET,(/IO or /RD));	-- R75: rev lc_E34_2 = DFFE(GND,VCC,/RESET,(/IO or /RD))
+--	STARTING = LCELL(/RESET & (STARTING or !(/IO or /RD)));
 
-	PAGE_RAM_WRITE_R		= DFFE(PAGE_WRITE_PIPE_R[1] & PORT_ADDR_R7 & PAGE_WRITE_PORT_CLASS, CLK42, !/IO,, CT1);
+	PGS[].clk	= !CLK42;
+	CASE (LCELL(/IO & !(A14 & A15 & !STARTING)),MC_END) IS
+		WHEN B"1X" => PGS[]	= (VCC,VCC,MPGS[5..0]);
+		WHEN B"01" => PGS[] = DD[];
+		WHEN B"00" => PGS[] = GND;
+	END CASE;
 
-	CACHE_PORT_CLASS_N		= LCELL(!PORT_ADDR_R3 or !PORT_ADDR_R1 or !PORT_ADDR_R4 or PORT_ADDR_R5);
-	CACHE_PORT_LOW_N		= LCELL(PORT_ADDR_R2 or !PORT_ADDR_R0 or PORT_ADDR_R6 or PORT_ADDR_R7);
-	CACHE_WRITE_WINDOW_N		= LCELL(CACHE_PORT_CLASS_N or CACHE_PORT_LOW_N or !IO_ACTIVE_R or /WR);
-	CACHE_SELECT_N		= LCELL(CACHE_WRITE_WINDOW_N & !PAGE_CACHE_INHIBIT_R);
-	CSCH		= CACHE_SELECT_N;
+	MEM_WR	= DFFE((DCPP[7] & DCPP[6] & STARTING & DFF(DFF((MC_END & !/WR),CLK42,,),CLK42,,)),CLK42,!/IO,,CT1);
 
-	ACC_PHASE_DELAY_R		= DFFE(!ACC_MEMORY_PHASE_ACTIVE_R, CLK42,,,);
-	ACC_PHASE_RISE		= LCELL(ACC_PHASE_DELAY_R & ACC_MEMORY_PHASE_ACTIVE_R);
-	ACC_CYCLE_DELAY_N_R		= DFFE(ACC_CYCLE_N, CLK42,,,);
-	ACC_COUNT_RUN_MODE		= LCELL(!ACC_CYCLE_DELAY_N_R);
-	UCNT_SEL	= ACC_COUNT_RUN_MODE;
-	ACC_MEMORY_PHASE_R		= DFFE((!/WR & CT1) or (!/RD & CT0), CLK42,,,);
-	ACC_IO_DELAY_R		= DFFE(IO_ACTIVE_R, CLK42,,,);
-	ACC_COUNT_WRITE_CLOCK		= DFFE(/WR or ACC_COUNT_PORT_N_R or !IO_ACTIVE_R or ACC_IO_DELAY_R, CLK42,,,);
-	U_WRC7		= ACC_COUNT_WRITE_CLOCK;
-	ACC_FRACTION_ENABLE		= LCELL(!ACC_COUNT_WRITE_CLOCK or (ACC_MEMORY_PHASE_ACTIVE_R & ACC_RAM_SOURCE & ACC_MEMORY_PHASE_R));
-	ACC_FRACTION_STEP_EN		= ACC_FRACTION_ENABLE;
-	ACC_COUNT_PORT_CLASS_N		= LCELL(!PORT_ADDR_R1 or PORT_ADDR_R4 or !PORT_ADDR_R6 or PORT_ADDR_R5);
-	ACC_COUNT_PORT_N_R		= DFFE(ACC_COUNT_PORT_CLASS_N or !PORT_ADDR_R0 or !PORT_ADDR_R7 or !PORT_ADDR_R2, CLK42,,,);
-	ACC_LINE_PORT_UPPER_N		= LCELL(/WR or PORT_ADDR_R5 or PORT_ADDR_R4);
-	ACC_LINE_PORT_LOWER_N		= LCELL(PORT_ADDR_R0 or !PORT_ADDR_R2 or !PORT_ADDR_R7 or !PORT_ADDR_R6);
-	ACC_LINE_WRITE_N_R		= DFFE(ACC_LINE_PORT_LOWER_N or ACC_LINE_PORT_UPPER_N or !IO_ACTIVE_R or PORT_ADDR_R1, CLK42,,,);
-	ACC_LINE_MODE		= LCELL(ACC_MODE_R[0] & ACC_MODE_R[1]);
-	ACC_ADDRESS_MODE		= LCELL(ACC_MODE_R[0] & !ACC_MODE_R[1]);
-	ACC_LINE_ENABLE		= LCELL((ACC_PHASE_DELAY_R & ACC_MEMORY_PHASE_ACTIVE_R & ACC_LINE_MODE) or !ACC_LINE_WRITE_N_R);
-	U1_ENA		= ACC_LINE_ENABLE;
-	ACC_COUNT_ENABLE		= LCELL((ACC_MEMORY_PHASE_R & ACC_MEMORY_PHASE_ACTIVE_R & ACC_MODE_BIT0) or ACC_CYCLE_N);
-	U0_ENA		= ACC_COUNT_ENABLE;
-	ACC_ADDRESS_ENABLE		= LCELL((!ACC_MEMORY_PHASE_ACTIVE_R & ACC_ADDRESS_MODE & CAS_N_R) or ACC_CYCLE_N);
-	U2_ENA		= ACC_ADDRESS_ENABLE;
-	ROM_WRITE_PORT_UPPER_N		= LCELL(/RD or /IO or PORT_ADDR_R4 or !PORT_ADDR_R3);
-	ROM_WRITE_PORT_LOWER_N		= LCELL(PORT_ADDR_R1 or PORT_ADDR_R0 or PORT_ADDR_R5 or PORT_ADDR_R6);
-	ROM_WRITE_CLOCK		= LCELL(ROM_WRITE_PORT_UPPER_N or ROM_WRITE_PORT_LOWER_N or !PORT_ADDR_R7 or PORT_ADDR_R2);
-	CPU_IO_PORT_RANGE		= LCELL((!PORT_ADDR_R6 & !PORT_ADDR_R7 & !PORT_ADDR_R4 & !PORT_ADDR_R5) or (!PORT_ADDR_R6 & !PORT_ADDR_R7 & PORT_ADDR_R4 & PORT_ADDR_R5));
-	ACC_MEMORY_PHASE_ACTIVE_R		= DFFE(!ACC_CYCLE_N & CAS_N_R, CLK42, ACC_MEMORY_CLEAR_N,, CT1);
-	ACC_MEMORY_CLEAR_N		= LCELL(!/MR & /M1);
-	ACC_FETCH_INHIBIT		= LCELL(!/RF or !/M1 or ACC_FETCH_BLOCK_R or /MR);
-	ACC_CYCLE_N		= LCELL(!ACC_MODE_ACTIVE or !MC_ACCESS_R[0] or ACC_FETCH_INHIBIT);
-	BUS_WORD_HIGH_R		= DFFE(A1, CLK42,,, SEQ_STB);
-	CAS_SELECT0		= LCELL((!BUS_WORD_HIGH_R & !ACC_CYCLE_N & ACC_MD_COPY) or (!BUS_WORD_HIGH_R & !BUS_BYTE_HIGH_R));
-	CAS_SELECT1		= LCELL((!BUS_WORD_HIGH_R & !ACC_CYCLE_N & ACC_MD_COPY) or (!BUS_WORD_HIGH_R & BUS_BYTE_HIGH_R));
-	CAS_SELECT3		= LCELL((BUS_WORD_HIGH_R & !ACC_CYCLE_N & ACC_MD_COPY) or (BUS_WORD_HIGH_R & BUS_BYTE_HIGH_R));
-	CAS_SELECT2		= LCELL((BUS_WORD_HIGH_R & !ACC_CYCLE_N & ACC_MD_COPY) or (BUS_WORD_HIGH_R & !BUS_BYTE_HIGH_R));
-	CAS_OUTPUT2		= LCELL((!CAS_SELECT2 & MC_ACCESS_R[0]) or !CAS_N_R);
-	CASQ[0]		= LCELL((!CAS_SELECT0 & MC_ACCESS_R[0]) or !CAS_N_R);
-	CASQ[1]		= LCELL((!CAS_SELECT1 & MC_ACCESS_R[0]) or !CAS_N_R);
-	CASQ[2]		= CAS_OUTPUT2;
-	CASQ[3]		= LCELL((!CAS_SELECT3 & MC_ACCESS_R[0]) or !CAS_N_R);
+	ADR8_MEM	= GND;
 
-	ACC_COUNT_UPPER_NONZERO		= LCELL(UCNT7 or UCNT6 or UCNT4 or UCNT5);
-	ACC_COUNT_LOWER_NOT_ONE		= LCELL(UCNT3 or UCNT2 or UCNT1 or !UCNT0);
-	ACC_COUNT_WAIT_R = DFFE((ACC_COUNT_UPPER_NONZERO & ACC_MODE_BIT0) or (ACC_MODE_BIT0 & ACC_COUNT_LOWER_NOT_ONE), CLK42, /M1,, ACC_PHASE_RISE);
+	CASE ADR8_MEM IS
+		WHEN 1 => MEM_D[]	= (DI[],MEM.q[7..0]);	DO[] = MEM.q[15..8];
+		WHEN 0 => MEM_D[]	= (MEM.q[15..8],DI[]);	DO[] = MEM.q[7..0];
+	END CASE;
 
-	TURBO_WAIT_RANGE		= LCELL(A[6] & A[2] & A[5]);
-	TURBO_WAIT_CLEAR_R		= DFFE(TURBO_WAIT_RANGE & TURBO_N_R & A[7] & !DOS_R, CLK42,,,);
-	CPU_WAIT_ASSERT		= LCELL((!REFRESH_WAIT_INHIBIT & !PAGE_NO_WAIT_R & MEMORY_WAIT_PENDING) or !IO_WAIT_RELEASE);
-	IO_WAIT_PENDING_R		= DFFE(!WAIT_TERM_SLOT_R, CLK42, !TURBO_WAIT_CLEAR_R,,);
-	IO_WAIT_RELEASE		= LCELL(!IO_WAIT_PENDING_R or IO_CYCLE_N_DATA_BUFFER);
-	REFRESH_WAIT_INHIBIT		= LCELL(/MR or !/RF);
-	MEMORY_WAIT_DONE_R		= DFFE(BUS_CYCLE_DONE_R, CLK42, !/MR,,);
-	MEMORY_WAIT_PENDING		= LCELL((!MEMORY_WAIT_DONE_R & !TURBO_N_R) or (!MEMORY_WAIT_DONE_R & ACC_MODE_ACTIVE));
-	KEY_MOUSE_READ_INHIBIT		= LCELL(!IO_ACTIVE_R or !MEM.q[6] or !MEM.q[9]);
-	KEY_MOUSE_READ_N		= LCELL(MEM.q[12] or KEY_MOUSE_READ_INHIBIT or !MEM.q[0] or /RD);
-	RDKMQ		= KEY_MOUSE_READ_N;
-	XA_WRITE_STAGE0_R		= DFFE(VCC, !CT2, !/WR,,);
-	XA_WRITE_STAGE1_R		= DFFE(!XA_WRITE_STAGE0_R, !CT2, !/WR,,);
-	XA_SELECT_N_R		= DFFE(/MR or !ROM_PAGE_ENABLE_R or !XA_WRITE_STAGE1_R, CLK42,,,);
-	XACQ		= XA_SELECT_N_R;
-	/WAIT		= !CPU_WAIT_ASSERT;
-	/IOMM		= !IOMYQ;
-	/IOM		= !IOMZQ;
-
-	ACC_OPCODE_EQUALITY		= LCELL((!DI1 & !DI3 & !DI0 & !DI4) or (DI1 & !DI3 & !DI0 & DI4) or (!DI1 & DI3 & DI0 & !DI4) or (DI1 & DI3 & DI0 & DI4));
-	ACC_MODE_CAPTURE_R		= DFFE(ACC_OPCODE_EQUALITY & !/M1 & !CPU_PREFIX_R & CPU_ACC_OPCODE_CLASS, CLK_Z80,,,);
-	ACC_MODE_CLEAR_N		= LCELL(/RESET & !ALL_MODE_N_R);
-
-	ACC_STARTED_CLEAR_N		= LCELL(/RESET & !ACC_STARTED_DELAY_R);
-	ACC_STARTED_R		= DFFE(VCC, /MR, ACC_STARTED_CLEAR_N,, ACC_MODE_CAPTURE_R);
-	ACC_STARTED_DELAY_R		= DFFE(ACC_STARTED_R, CLK_Z80,,,);
-	ACC_COUNT_LOAD_MODE		= LCELL(ACC_MODE_R[1] & !ACC_MODE_R[2] & !ACC_MODE_R[0]);
-	ACC_RAM_SOURCE		= LCELL(ACC_MODE_R[2] & ACC_MODE_R[0]);
-	ACC_COUNT_LOAD_EN_R		= DFFE(ACC_COUNT_LOAD_MODE & /RF & /M1, CLK_Z80,,,);
-	ACC_MODE_BIT0		= LCELL(ACC_MODE_R[0]);
-	ACC_MD_COPY		= LCELL(!ACC_MODE_R[1] & ACC_MODE_R[2] & !ACC_MODE_R[0]);
-	ACC_MODE_ACTIVE		= LCELL((ACC_MODE_R[1] & !ACC_MODE_R[2]) or (!ACC_MODE_R[1] & ACC_MODE_R[2]) or ACC_MODE_R[0]);
-	SCREEN_PAGE_HIGH		= LCELL(A15 & PN[1]);
-	SCREEN_ROW6_XOR		= LCELL(SCREEN_PAGE_HIGH $ G_LINE[0] $ GA[3]);
-	ACC_FETCH_CLEAR_N		= LCELL(/RESET & ACC_STARTED_R);
-	ACC_FETCH_PENDING_R		= DFFE((CPU_RETI_R & ACC_FETCH_BLOCK_R) # (/IO & !ACC_FETCH_BLOCK_R), CLK_Z80,,,);
-	ACC_FETCH_BLOCK_R		= DFFE(!ACC_FETCH_PENDING_R, /M1, ACC_FETCH_CLEAR_N,,);
-	CPU_PREFIX_HIGH_BITS		= LCELL(DI6 & DI0 & DI3);
-	CPU_BLOCK_OPCODE_BITS		= LCELL((DI6 & DI0 & DI1) & CASCADE(!CPU_PREFIX_R & !DI2 & DI4));
-	CPU_PREFIX_LOW_BITS		= LCELL((!DI5 & DI1 & !DI2 & !DI4) or (DI5 & !DI1 & DI2) or (!DI1 & DI2 & DI4));
-	CPU_LOGIC_OPCODE_BITS		= LCELL(!DI4 & !CPU_PREFIX_R);
-	CPU_M1_R		= DFFE(/M1, CLK_Z80,,,);
-	CPU_OPCODE_CAPTURE_EN		= LCELL(!CPU_M1_R);
-	VDW_XOR_AND_R		= DFFE(CPU_LOGIC_OPCODE_BITS & !DI6 & DI7, /MR,,, CPU_OPCODE_CAPTURE_EN);
-	CPU_BLOCK_OPCODE_R		= DFFE(CPU_BLOCK_OPCODE_BITS & DI7 & !DI5, /MR, /IO,, CPU_OPCODE_CAPTURE_EN);
-	CPU_PREFIX_R		= DFFE(CPU_PREFIX_LOW_BITS & DI7 & CPU_PREFIX_HIGH_BITS, /MR,,, CPU_OPCODE_CAPTURE_EN);
-	CPU_ED_OPCODE_BITS		= LCELL((DI6 & DI0 & !DI1) & CASCADE(DI3 & DI2 & !DI4));
-	CPU_RETI_OPCODE_BITS		= LCELL((DI6 & DI0 & !DI1) & CASCADE(CPU_ED_PREFIX_R & DI3 & DI2 & !DI4));
-	CPU_ED_PREFIX_R		= DFFE(CPU_ED_OPCODE_BITS & DI7 & DI5, /MR,,, CPU_OPCODE_CAPTURE_EN);
-	CPU_RETI_R		= DFFE(CPU_RETI_OPCODE_BITS & !DI5 & !DI7, /MR,,, CPU_OPCODE_CAPTURE_EN);
-	CPU_ACC_OPCODE_CLASS		= LCELL((!DI7 & !DI5 & !DI2 & DI6) or (!DI7 & DI5 & DI2 & DI6));
-	MODE_PORT_UPPER		= LCELL(PORT_ADDR_R0 & PORT_ADDR_R6 & PORT_ADDR_R7);
-	MODE_PORT_LOWER		= LCELL(!PORT_ADDR_R3 & !PORT_ADDR_R4 & !PORT_ADDR_R5);
-	MODE_PORT_WRITE_R		= DFFE(MODE_PORT_UPPER & MODE_PORT_LOWER & !PORT_ADDR_R2 & PORT_ADDR_R1, CLK42,,,);
-	IO_WRITE_PHASE_R		= DFFE(!IO_ACTIVE_R or /WR, CLK42,,,);
-	ALL_MODE_N_R		= DFFE(!DI0, IO_WRITE_PHASE_R, /RESET,, MODE_PORT_WRITE_R);
-	KEY_READY_N_R		= DFFE(!KB_RECEIVE_COUNT_N[0] or !KB_RECEIVE_COUNT_N[2] or !KB_RECEIVE_COUNT_N[1], CLK42, !ALL_MODE_N_R,,);
-
-	TURBO_N_R		= DFFE(TURBO_PORT_N_R or KEY_TURBO_LATCH_R, CLK42, /RESET,, CLK_Z80);
-	CPU_FETCH_CLOCK		= LCELL(!/MR & !/M1);
-	DOS_R		= DFFE((!CA[14] & !CA[15] & DOS_ENTRY_ENABLE) or (DOS_R & !CA[14] & !CA[15]), CPU_FETCH_CLOCK, /RESET,,);
-	DOS_ENTRY_ADDRESS		= LCELL(CA[13] & CA[11] & CA[10] & CA[12]);
-	DOS_ENTRY_ENABLE		= LCELL(DOS_ENTRY_ADDRESS & !CA[9] & PN[4] & CA[8]);
-	ROM_READ_INHIBIT		= LCELL(MEMORY_READ_INACTIVE or (!PAGE_ROM_RANGE & CPU_PAGE_SELECT_R) or CPU_MEMORY_RANGE);
-	IO_OR_PAGE_WRITE		= LCELL((!/WR & !/IO) or PAGE_WRITE_RANGE);
-	PAGE_WRITE_RANGE		= LCELL(CPU_PAGE_SELECT_R & MEM.q[14] & MEM.q[11] & MEM.q[5]);
-	PAGE_ROM_RANGE		= LCELL(MEM.q[3] & MEM.q[14] & !MEM.q[11] & MEM.q[5]);
-	MEMORY_READ_INACTIVE		= LCELL(/MR or /RD);
-	ROM_LOW_ENABLE		= LCELL(/IO & IO_OR_PAGE_WRITE & MEM.q[3] & !ROM_PAGE_ENABLE_R);
-	ROM_HIGH_ENABLE		= LCELL(!IO_OR_PAGE_WRITE & CPU_MEMORY_RANGE & !ROM_PAGE_ENABLE_R);
-	ROM_PAGE_BANK_SELECT		= LCELL((ROM_PAGE_LATCH_R & SYSTEM_PORT_R[1]) or (ROM_PAGE_LATCH_R & !ISA_MAP_R) or (!DOS_R & ISA_MAP_R & !SYSTEM_PORT_R[1]));
-	ROM_DOS_BANK_SELECT		= LCELL((ROM_TRDOS128_RANGE & !SYSTEM_PORT_R[1]) or (DOS_R & ISA_MAP_R & !SYSTEM_PORT_R[1]));
-	ROM_BANK_PHASE		= LCELL((ROM_PAGE_BANK_SELECT & !ROM_SYSTEM128_RANGE & !ROM_TRDOS128_RANGE) or (ROM_PAGE_BANK_SELECT & SYSTEM_PORT_R[1]));
-	ROM_TRDOS128_RANGE		= LCELL(!KEY_ROM_BANK_R & PN[4] & ISA_MAP_R & !DOS_R);
-	ROM_DOS_RANGE		= LCELL(PN[4] & !DOS_R & ISA_MAP_R & !SYSTEM_PORT_R[1]);
-	ROM_TRDOS_BANK		= LCELL((ROM_TRDOS128_RANGE & !SYSTEM_PORT_R[1]) or (ROM_SYSTEM128_RANGE & !SYSTEM_PORT_R[1]) or (!SYSTEM_PORT_R[1] & ROM_SYSTEM48_RANGE));
-	ROM_SYSTEM128_RANGE		= LCELL(!KEY_ROM_BANK_R & !PN[4] & ISA_MAP_R & !DOS_R);
-	ROM_SYSTEM48_RANGE		= LCELL(KEY_ROM_BANK_R & !PN[4] & ISA_MAP_R & !DOS_R);
-	ROM_LOW_READ		= LCELL(!IO_OR_PAGE_WRITE & !CPU_MEMORY_RANGE & !ROM_PAGE_ENABLE_R);
-	ROM_A15_DOS		= LCELL((ROM_LOW_READ & ROM_DOS_RANGE & KEY_ROM_BANK_R) or (ROM_LOW_READ & ROM_TRDOS_BANK));
-	ROM_A14_DOS		= LCELL((ROM_LOW_READ & ROM_DOS_RANGE & KEY_ROM_BANK_R) or (ROM_LOW_READ & ROM_DOS_BANK_SELECT));
-	ROM_MAPPED_READ		= LCELL(!ROM_PAGE_ENABLE_R & IO_OR_PAGE_WRITE);
-	ROM_HIGH_BANK_SELECT		= LCELL(((!PORT_8F_R[3] & ROM_BANK_PHASE) or (!ROM_LOW_READ & !PORT_8F_R[3]) or (ROM_BANK_PHASE & !ROM_PAGE_ENABLE_R) or (!ROM_LOW_READ & !ROM_PAGE_ENABLE_R)) & CASCADE(!/IO or !IO_OR_PAGE_WRITE or MEM.q[3] or ROM_PAGE_ENABLE_R));
-	ROM_A17_BUFFER		= LCELL(ROM_HIGH_BANK_SELECT);
-	ROM_A14_SELECT		= LCELL((ROM_MAPPED_READ & MEM.q[1]) or ROM_A14_PAGE or ROM_A14_DOS);
-	ROM_A15_PAGE		= LCELL((CA[15] & ROM_HIGH_ENABLE) or (PORT_8F_R[1] & ROM_PAGE_ENABLE_R));
-	ROM_A14_PAGE		= LCELL((CA[14] & ROM_HIGH_ENABLE) or (PORT_8F_R[0] & ROM_PAGE_ENABLE_R));
-	ROM_A16_SELECT		= LCELL((PORT_8F_R[2] & ROM_PAGE_ENABLE_R) or ROM_LOW_ENABLE or ROM_HIGH_ENABLE);
-	ROM_A15_SELECT		= LCELL((ROM_MAPPED_READ & MEM.q[13]) or ROM_A15_PAGE or ROM_A15_DOS);
-	ROM_PAGE_ENABLE_R		= DFFE(PORT_8F_R[4] & !CA[14], CLK42,,,);
-	CPU_DATA_IDLE_R		= DFFE(/RD & /WR, CLK42,,,);
-	ROM_REFRESH_INHIBIT		= LCELL(CPU_DATA_IDLE_R or /MR or !/RF);
-	ROM_CHIP_SELECT		= LCELL((ROM_REFRESH_INHIBIT & ROM_PAGE_ENABLE_R) or (ROM_READ_INHIBIT & !ROM_PAGE_ENABLE_R) or (PORT_8F_R[4] & !ROM_PAGE_ENABLE_R));
-
-	RA14		= ROM_A14_SELECT;
-	RA15		= ROM_A15_SELECT;
-	RA16		= ROM_A16_SELECT;
-	RA17		= !ROM_A17_BUFFER;
-	CS_ROM		= ROM_CHIP_SELECT;
-	CS_RAM		= LCELL(/MR or RAM or !/RF);
-	DOSQ		= DOS_R;
-	DOS			= DOS_R;
-
-	PAGE_ADDR_R[].clk	= !CLK42;
-
-	PAGE_DEFAULT5		= LCELL(!PN[7] or !A[15] or !A[14]);
-	PAGE_DEFAULT4		= LCELL(A[15] & A[14]);
-	ROM_MAP_R		= DFFE(A7, ROM_WRITE_CLOCK, /RESET,,);
-	PAGE_CPU_BANK_SELECT		= LCELL(ROM_MAP_R or !ISA_MAP_R or SYSTEM_PORT_R[0]);
-	PAGE_DEFAULT3		= LCELL((PAGE_CPU_BANK_SELECT & PAGE_PN6_SELECT) or (PAGE_CPU_BANK_SELECT & !A[15]) or (PAGE_PN6_SELECT & A[14]) or (!A[15] & A[14]) or (A[15] & !A[14]));
-	PAGE_DOS_PHASE		= LCELL((!ROM_MAP_R & !SYSTEM_PORT_R[1] & !ISA_MAP_R) or (!ROM_MAP_R & !SYSTEM_PORT_R[1] & !SYSTEM_PORT_R[0]));
-	PAGE_CPU_PN_SELECT		= LCELL((ROM_PAGE_LATCH_R & !ISA_MAP_R) or (ROM_PAGE_LATCH_R & !SYSTEM_PORT_R[0]) or ROM_MAP_R);
-	PAGE_DEFAULT2		= LCELL((PAGE_CPU_PN_SELECT & !A[15] & !A[14]) or (PN[2] & A[15] & A[14]));
-	PAGE_CPU_LOW_PHASE		= LCELL((!DOS_R & PAGE_DOS_PHASE) or !ISA_MAP_R);
-	PAGE_DEFAULT1		= LCELL((PN[1] & A[15]) or (PAGE_CPU_LOW_PHASE & !A[14]) or (A[15] & !A[14]));
-	PAGE_CPU_UPPER_PHASE		= LCELL((PN[4] & PAGE_DOS_PHASE) or (DOS_R & PAGE_DOS_PHASE) or !ISA_MAP_R);
-	PAGE_DEFAULT0		= LCELL((PAGE_CPU_UPPER_PHASE & !A[15]) or (PN[0] & A[14]) or (!A[15] & A[14]));
-
-	MEM.data[]		= (MEM.q[15],DI7,DI1,MEM.q[12],DI4,MEM.q[10],MEM.q[9],MEM.q[8],
-					   DI3,MEM.q[6],DI6,MEM.q[4],DI5,DI2,DI0,MEM.q[0]);
-	MEM.wren		= PAGE_RAM_WRITE_R;
-	MEM.wraddress[]	= PAGE_ADDR_R[];
+	MEM.wren 		= MEM_WR;
+	MEM.data[] 		= MEM_D[];
+	MEM.wraddress[] = PGS[];
 	MEM.wrclock		= CLK42;
 	MEM.wrclken		= VCC;
 	MEM.rden		= VCC;
-	MEM.rdaddress[]	= PAGE_ADDR_R[];
+	MEM.rdaddress[] = PGS[];
 	MEM.rdclock		= CLK42;
 	MEM.rdclken		= VCC;
+--					= MEM.q[];
 
 	PAGE[]			= MEM.q[11..0];
 	TYPE[]			= MEM.q[15..12];
 
+	CS_ROM			= LCELL(/MR or !RAM or !/RF);
+	CS_RAM			= LCELL(/MR or  RAM or !/RF);
+
+--	RA[]			= (VCC,MEM.q[3..1]);
+
 	V_RAM			= !(MEM.q[15..12] == 13) or /MR;
 	PORT			= !(MEM.q[15..12] == 0) or /IO or (/RD & /WR);
 
-	SP_SCR		= LCELL((A[15..14] == 1 and !GRAF) or (A[15..14] == 3 and !GRAF and PAGE_DEFAULT1));
-	SP_SA		= LCELL((A[15..14] == 2 and PAGE_DEFAULT0) or (A[15..14] == 3 and PAGE_DEFAULT0));
-
-	GA[8] = GND;
-	GA[9] = LCELL(GRAF);
-
-	MD_READ_HIGH_R	= DFFE(/WR, !RAS_N_R,,,);
-	MD_SWAP_CLOCK	= LCELL((/WR & /RD) or (/WR & !IO_WAIT_STAGE_R));
-	MD_SWAP_ENABLE	= LCELL(IO_ACTIVE_R & IDE_PAGE_ACTIVE_R);
-	IDE_SWAP_RESTART_CLOCK	= LCELL(!ACC_MD_COPY or ACC_CYCLE_N);
-	IDE_SWAP_RESTART_R	= DFFE(VCC, IDE_SWAP_RESTART_CLOCK, IDE_BYTE_PHASE_R,,);
-	IDE_SWAP_CLEAR_N	= LCELL(/RESET & !IDE_SWAP_RESTART_R);
-	CPU_IO_N_R	= DFFE(/IO, CLK42,,,);
-
-	KEY_SCAN_CLEAR_N	= DFFE(VCC, KEY_SCAN_R[2], KEY_MATRIX_CLEAR_N,,);
-	KEY_ROW_HIGH_SELECT	= LCELL((CA14 & KEY_SCAN_R[2] & !KEY_SCAN_R[0]) or (CA10 & !KEY_SCAN_R[2] & !KEY_SCAN_R[0]));
-	KEY_ROW_PAIR_SELECT_N	= LCELL(((!CA12 & KEY_SCAN_R[2]) or (!CA8 & !KEY_SCAN_R[2]) or KEY_SCAN_R[0]) & CASCADE((!CA9 & !KEY_SCAN_R[2]) or (!CA13 & KEY_SCAN_R[2]) or !KEY_SCAN_R[0]));
-	KEY_ROW_LOW_SELECT	= LCELL((CA11 & !KEY_SCAN_R[2] & KEY_SCAN_R[0]) or (CA15 & KEY_SCAN_R[2] & KEY_SCAN_R[0]));
-	KEY_ROW_INACTIVE_R	= DFFE((KEY_ROW_HIGH_SELECT & KEY_SCAN_R[1]) or (KEY_ROW_LOW_SELECT & KEY_SCAN_R[1]) or (!KEY_SCAN_R[1] & !KEY_ROW_PAIR_SELECT_N), CLK42,,,);
-
-	IDE_PAGE_HIGH_ZERO_R	= DFFE(!MEM.q8 & !MEM.q4 & !MEM.q10 & !MEM.q15, CLK42,,,);
-	IDE_PAGE_CLASS	= LCELL(MEM.q14 & !MEM.q5 & MEM.q3);
-	IDE_SWAP_CLASS	= LCELL(PORT_CLASS_R[0] & MEM.q3 & !MEM.q5 & MEM.q14);
-	IDE_PAGE_ACTIVE_R	= DFFE(IDE_PAGE_HIGH_ZERO_R & IDE_PAGE_CLASS & PORT_CLASS_R[1], CLK42,,,);
-	IDE_BYTE_PHASE_R	= DFFE(!MEM.q8 & !MEM.q10 & IDE_BYTE_PHASE_NEXT, !IO_ACTIVE_R, IDE_SWAP_CLEAR_N,, IDE_SWAP_CLASS);
-	IDE_BYTE_PHASE_NEXT	= LCELL(!IDE_BYTE_PHASE_R & !MEM.q4 & !MEM.q15);
-	CPU_READ_CAPTURE_EN	= DFFE(!BUS_CYCLE_DONE_R, CLK42,,,);
-	CPU_READ_LOW_ONES	= LCELL(CPU_READ_STAGE_R[1] & CPU_BLOCK_OPCODE_R & CPU_READ_STAGE_R[2] & CPU_READ_STAGE_R[0]);
-	CPU_READ_COMMAND_CLEAR	= LCELL((CPU_READ_LOW_ONES & !/RD & !CPU_READ_STAGE_R[7] & !/MR) & CASCADE(!CPU_READ_STAGE_R[5] & !CPU_READ_STAGE_R[6] & CPU_READ_STAGE_R[4] & CPU_READ_STAGE_R[3]));
-
-	XA_HALF_CYCLE_R	= DFFE(!XA_HALF_CYCLE_R, !XA_READ_PHASE_R,,,);
-	XA_LOW_HALF_ENABLE	= LCELL(!XA_HALF_CYCLE_R);
-	XA_VSYNC_R	= DFFE(XA3, !XA_READ_PHASE_R, BUS_STARTUP_RELEASE_R,, XA_HALF_CYCLE_R);
-
-	CBL_PORT_UPPER	= LCELL(PORT_ADDR_R3 & !PORT_ADDR_R5 & !PORT_ADDR_R4);
-	CBL_PORT_MIDDLE	= LCELL(PORT_ADDR_R0 & PORT_ADDR_R7 & !PORT_ADDR_R6);
-	CBL_PORT_WRITE_R	= DFFE(CBL_PORT_UPPER & CBL_PORT_MIDDLE & !PORT_ADDR_R2 & !PORT_ADDR_R1, CLK42,,,);
-	CBL_ENABLE_R	= DFFE(DI7, IO_WRITE_PHASE_R,,, CBL_PORT_WRITE_R);
-	CBL_RATE_MODE_R	= DFFE(DI0, IO_WRITE_PHASE_R,,, CBL_PORT_WRITE_R);
-
-	CBL_READ_TICK	= LCELL(!CBL_DIV_R[0] & !CBL_DIV_R[2] & !CBL_DIV_R[1]);
-	CBL_CA8_N	= LCELL(CBL_ENABLE_R & !CA8);
-	CBL_CA13_N	= LCELL(CBL_ENABLE_R & !CA13);
-	CBL_CA9_N	= LCELL(CBL_ENABLE_R & !CA9);
-
-	KEY_CBL_MSB	= LCELL((CBL_ENABLE_R & CBL_PTR_R[7]) or (!CBL_ENABLE_R & !KEY_MATRIX_HIT_R[1]));
-
-	CBL_FRAME_PHASE	= LCELL(!C68 & CBL_ENABLE_R);
-
-	DOE		= CPU_BUS_READ_ENABLE;
-	DMUX[7..0] = (CPU_BUS_READ[7], CPU_BUS_READ[6], CPU_BUS_READ[5], CPU_BUS_READ[4], CPU_BUS_READ[3], CPU_BUS_READ[2], CPU_BUS_READ[1], CPU_BUS_READ[0]);
-
-	CPU_BUS_READ_ENABLE	= LCELL((!/IO & !/RD & !CPU_IO_PORT_RANGE) or (MEMORY_READ_ENABLE & !/RD));
-
-	KEY_PREFIX_HIGH_ZERO	= LCELL(!KB_RECEIVE_BITS[3] & !KB_RECEIVE_BITS[1] & !KB_RECEIVE_BITS[2]);
-
-	KEY_PREFIX_HIGH_ZERO_COPY	= LCELL(!KB_RECEIVE_BITS[3] & !KB_RECEIVE_BITS[1] & !KB_RECEIVE_BITS[2]);
-	KEY_CTRL_CODE_LOW	= LCELL(KB_RECEIVE_BITS[5] & KB_RECEIVE_BITS[3] & !KB_RECEIVE_BITS[2] & !KB_RECEIVE_BITS[1]);
-	KEY_COUNT_ONE	= LCELL(!KB_RECEIVE_COUNT_N[0] & KB_RECEIVE_COUNT_N[2] & KB_RECEIVE_COUNT_N[1]);
-	KEY_F12_CODE_LOW	= LCELL(!KB_RECEIVE_BITS[5] & KB_RECEIVE_BITS[3] & KB_RECEIVE_BITS[2] & KB_RECEIVE_BITS[1]);
-	KEY_CODE_HIGH_ZERO	= LCELL(!KB_RECEIVE_BITS[8] & !KB_RECEIVE_BITS[6] & !KB_RECEIVE_BITS[7] & !KB_RECEIVE_BITS[4]);
-	KEY_RELEASE_CODE_HIGH	= LCELL(KB_RECEIVE_BITS[8] & KB_RECEIVE_BITS[6] & !KB_RECEIVE_BITS[4] & KB_RECEIVE_BITS[7]);
-	KEY_EXT_CODE_HIGH	= LCELL(KB_RECEIVE_BITS[6] & KB_RECEIVE_BITS[7] & !KB_RECEIVE_BITS[4]);
-
-	KEY_NOT_EXTENDED	= LCELL(!KB_EXT_PREFIX);
-
-	KEY_F12_N_R	= DFFE(!KB_RELEASE & KEY_CODE_HIGH_ZERO & KEY_F12_CODE_LOW, KB_RECEIVE_COUNT_N[2], !KEY_COUNT_ONE,,);
-	KEY_CTRL_R	= DFFE((KEY_CTRL_R & !KEY_CTRL_CODE_LOW) or (KEY_CTRL_R & !KEY_CODE_HIGH_ZERO) or (!KB_RELEASE & KEY_CODE_HIGH_ZERO & KEY_CTRL_CODE_LOW), KB_RECEIVE_COUNT_N[2],,,);
-	KEY_SHIFT_CODE_HIGH	= LCELL(!KB_RECEIVE_BITS[8] & !KB_RECEIVE_BITS[6] & !KB_RECEIVE_BITS[3] & KB_RECEIVE_BITS[5]);
-	KEY_SHIFT_CODE	= LCELL(KEY_SHIFT_CODE_HIGH & CASCADE((KB_RECEIVE_BITS[7] & KB_RECEIVE_BITS[4] & !KB_RECEIVE_BITS[2] & KB_RECEIVE_BITS[1]) or (!KB_RECEIVE_BITS[7] & !KB_RECEIVE_BITS[4] & KB_RECEIVE_BITS[2] & !KB_RECEIVE_BITS[1])));
-	KEY_SHIFT_R	= DFFE((KEY_SHIFT_R & !KEY_SHIFT_CODE) or (KEY_SHIFT_CODE & !KB_RELEASE), KB_RECEIVE_COUNT_N[2],,,);
-
-	KEY_ALT_CODE_LOW	= LCELL(KB_RECEIVE_BITS[5] & !KB_RECEIVE_BITS[3] & KB_RECEIVE_BITS[1] & !KB_RECEIVE_BITS[2]);
-	KEY_RESET_CODE_HIGH	= LCELL(!KB_RELEASE & KB_RECEIVE_BITS[6] & !KB_RECEIVE_BITS[8]);
-	KEY_ALT_R	= DFFE((KEY_ALT_R & !KEY_CODE_HIGH_ZERO) or (KEY_ALT_R & !KEY_ALT_CODE_LOW) or (!KB_RELEASE & KEY_ALT_CODE_LOW & KEY_CODE_HIGH_ZERO), KB_RECEIVE_COUNT_N[2],,,);
-	KEY_CTRL_ALT	= LCELL(KEY_ALT_R & !KB_RECEIVE_BITS[4] & KEY_CTRL_R);
-	KEY_RESET_INHIBIT_R	= DFFE(KEY_RESET_CODE_HIGH & KEY_ALT_CODE_LOW & KB_RECEIVE_BITS[7] & KEY_CTRL_ALT, KB_RECEIVE_COUNT_N[2], !KB_ONE_TICK,,);
-
-	KEY_TURBO_LATCH_R	= DFFE((KEY_TURBO_LATCH_R & KEY_SHIFT_R) or (!KEY_TURBO_LATCH_R & !KEY_CTRL_R & !KEY_SHIFT_R) or (KEY_TURBO_LATCH_R & KEY_CTRL_R), !KEY_F12_N_R, /RESET,,);
-	KEY_ROM_BANK_R	= DFFE((KEY_ROM_BANK_R & !KEY_CTRL_R) or (!KEY_ROM_BANK_R & KEY_CTRL_R), !KEY_F12_N_R,,,);
-
 END;
+
+

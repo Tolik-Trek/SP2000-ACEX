@@ -13,23 +13,19 @@ SUBDESIGN mouse
 	INT			: OUTPUT;
 	)
 VARIABLE
-    SUM_X[9..0] : DFFE;
 
-    SUM_Y[9..0] : DFFE;
+	SUM_X[9..0]		: DFFE;
+	SUM_Y[9..0]		: DFFE;
 
-    CT[3..0] : DFF;
+	CT[3..0]	: DFF;
+	RG[9..0]	: DFFE;
+	STATE[1..0]	: DFFE;
+	RGK[5..0]	: DFFE;
 
-    RG[9..0] : DFFE;
+	MOUSE_IMP	: NODE;
 
-    STATE[1..0] : DFFE;
-
-    RGK[5..0] : DFFE;
-
-    MOUSE_IMP : NODE;
-
-    DDX[7..0] : NODE;
-
-    DDY[7..0] : NODE;
+	DDX[7..0]	: NODE;
+	DDY[7..0]	: NODE;
 
 BEGIN
 

@@ -25,6 +25,7 @@ SUBDESIGN acceler
 	DI[7..0]	: INPUT;
 
 	AO[15..0]	: OUTPUT;
+	DO[7..0]	: OUTPUT;
 
 	/IO			: INPUT;
 	/RD			: INPUT;
@@ -55,86 +56,73 @@ SUBDESIGN acceler
 
 	ACC_DIR[7..0]	: OUTPUT;
 
-	RAMQ[7..0]	: OUTPUT;	-- esb5.q -> VIDEO2 VDW-стейджинг (ecN_e = RAMQ[N-1])
-	UCNT[7..0]	: OUTPUT;	-- rev uadd0[] = ACC_CNT -> DCP esb5-addr
-	ABAH[7..0]	: OUTPUT;	-- actual ab_a30[15..8] integer byte -> DCP RAM address; low8 XAGR is fractional esb5-addr
-	VDWQ[7..0]	: INPUT;	-- esb5.q из DCP (rev ec*_e — RAM перенесён в DCP)
-
---	=== rev uadd-ena стробы из DCP (28a) ===
-	U0E			: INPUT;	-- lc_A28_1: ena uadd0 (ACC_CNT, -1)
-	U1E			: INPUT;	-- lc_D24_8: ena uadd1 (AGR/G_LINE, +1)
-	U2E			: INPUT;	-- lc_B25_3: ena uadd2 (AA/AO, +1/+2)
-	USEL		: INPUT;	-- lc_E21_7: 1=count, 0=load (uadd + ab_a30)
-	UWRC7		: INPUT;	-- lc_A28_7: sticky-строб (клок ALT_ACC)
-	FRACTION_STEP_EN		: INPUT;	-- lc_A28_2: ena ab_a30-банка
-	COUNT_LOAD_EN		: INPUT;	-- lc_A33_5: ena RGACC (=A23-банк)
-	ADDRESS_DOUBLE_STEP		: INPUT;	-- lc_A33_7: шаг uadd2 (+1/+2)
-
 	)
 VARIABLE
-    MDO[15..0] : DFFE;
 
-    PRF_CMD : DFFE;
+	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);	-- R75: буфер акселератора 8-битный (rev esb3)
 
-    ED_CMD : DFFE;
+	DO[7..0]	: DFFE;
+	READ_CAPTURE_ENABLE : NODE;
+	MDO[15..0]	: DFFE;
 
-    CB_CMD : DFFE;
+	PRF_CMD		: DFFE;
+	ED_CMD		: DFFE;
+	CB_CMD		: DFFE;
+	ID_CMD		: DFFE;
+	IN_OUT_CMD	: DFFE;
 
-    ID_CMD : DFFE;
+	CORRECT_1F	: NODE;
 
-    ACC_BLK : DFF;
+	ACC_BLK		: DFF;
 
-    RETI : DFFE;
+	RETI		: DFFE;
+	RETN		: DFFE;
 
-    RETN : DFFE;
+	AA[15..0]	: DFFE;
 
-    AA[15..0] : DFFE;
+	RGACC[7..0]	: DFFE;
+	AGR[7..0]	: DFFE;
+	ACC_CNT[7..0] : DFFE;
 
-    RGACC[7..0] : DFFE;
+	START_ACC	: NODE;
+	ACC_END		: DFFE;
+	FN_ACC[2..0]: DFFE;
+	ACC_MODE[3..0]	: DFFE;
 
-    AGR[7..0] : DFFE;
+	MD[7..0]	: LCELL;
+	XMD[7..0]	: DFF;
+	XMDH[7..0]	: DFF;
 
-    ACC_CNT[7..0] : DFFE;
+	ACC_DIR[7..0]	: LCELL;
 
-    START_ACC : NODE;
+	/M1M		: NODE;
 
-    ACC_END : DFFE;
+	ACC_GO		: NODE;
+	ACC_GO_1	: NODE;
 
-    FN_ACC[2..0] : DFFE;
+	RAM_WR		: NODE;
 
-    ACC_MODE[3..0] : DFFE;
+	STATE_EI	: DFFE;
 
-    MD[7..0] : LCELL;
+--	HDDR[7..0]	: DFFE;
 
-    XMDH[7..0] : DFF;
+	XAGR[7..0]		: DFFE;
+	AAGR[9..0]		: DFFE;
+	XCNT[7..0]		: DFFE;
+	ALT_ACC			: NODE;
 
-    ACC_DIR[7..0] : LCELL;
+	RAM_ADR[7..0]	: NODE;
+	ACC_C		: NODE;
+	WR_C7		: NODE;
 
-    /M1M : NODE;
+	XCNT_AGR[15..0]	: NODE;
 
-    ACC_GO : NODE;
+	MDOX[7..0]	: DFF;
+	MDOY[7..0]	: DFF;
 
-    ACC_GO_1 : NODE;
+	GLISS_BYTE_FF[1..0] : DFF;
 
-    STATE_EI : DFFE;
-
-    XAGR[7..0] : DFFE;
-
-    AAGR[9..0] : DFFE;
-
-    XCNT[7..0] : DFFE;
-
-    ALT_ACC : NODE;
-
-    XCNT_AGR[15..0] : NODE;
-
-    MDOX[7..0] : DFF;
-
-    MDOY[7..0] : DFF;
-
-    GLISS_R : DFF;
-
-    ACC_TIME : NODE;
+	ACC_TIME	: NODE;
 
 BEGIN
 
@@ -186,23 +174,32 @@ BEGIN
 	CB_CMD.d		= (DI[] == H"CB");
 	ID_CMD.d		= (DI[] == B"11X11101");
 
+	IN_OUT_CMD.clk	= /MR;
+	IN_OUT_CMD.ena	= /M1M;
+	IN_OUT_CMD.d	= (DI[] == B"1101X011") & !PRF_CMD;  -- D3/DB
+	IN_OUT_CMD.clrn	= /IO;
+
+	CORRECT_1F		= LCELL(IN_OUT_CMD & (DO[] == H"1F") & !/MR & !/RD);
+	DO[4..3].clrn	= !CORRECT_1F;
+
 	ACC_GO			= DFFE((CAS or START_ACC),CLK42,,(!/MR & /M1),CT1);
 	ACC_GO_1		= DFF(ACC_GO,CLK42,,);
 
 --	== accelerator number ==
 
 	RGACC[].clk		= /MR;
-	RGACC[].ena		= COUNT_LOAD_EN;	-- rev: A23-банк, ena=lc_A33_5
+	RGACC[].ena		= DFF((/M1 & /RF & ACC_DIR3),CLK_Z80,,);
 	RGACC[].d 		= DI[];
 
 --  == accelerator grafic line ==
 
 	AGR[].clk	= CLK42;
-	AGR[].ena	= U1E;	-- rev: ena uadd1 = lc_D24_8
+	AGR[].ena	= !DFF((/IOM or /WR or !DFF((DCP[] == B"1100X100"),CLK42,,)),CLK42,,) or
+					!(!ACC_DIR4 or ACC_GO or !ACC_GO_1);
 
-	CASE USEL IS
-		WHEN 1 => AGR[].d = AGR[] + 1;
-		WHEN 0 => AGR[].d = DI[];
+	CASE DFF(START_ACC,CLK42,,) IS
+		WHEN 0 => AGR[].d = AGR[] + 1;
+		WHEN 1 => AGR[].d = DI[];
 	END CASE;
 
 	AGR[].clrn	= /RESET;
@@ -211,24 +208,25 @@ BEGIN
 
 --  == accelerator counter ==
 
---	ACC_C			= (!ACC_GO & DFF(((CT0 & !/RD) or (CT1 & !/WR)),CLK42,,));  -- заменён rev lc_A28_4 (DCP)
+	ACC_C			= (!ACC_GO & DFF(((CT0 & !/RD) or (CT1 & !/WR)),CLK42,,));
 	ACC_CNT[].clk	= CLK42;
 --	ACC_CNT[].ena	= START_ACC or (ACC_C & ACC_DIR2);
-	ACC_CNT[].ena	= U0E;	-- rev: ena uadd0 = lc_A28_1
+	ACC_CNT[].ena	= LCELL(START_ACC or (ACC_C & ACC_DIR2));
 
-	CASE USEL IS
-		WHEN 1 => ACC_CNT[].d = ACC_CNT[] - 1;
-		WHEN 0 => ACC_CNT[].d = RGACC[];
+	CASE DFF(START_ACC,CLK42,,) IS
+		WHEN 1 => ACC_CNT[].d = RGACC[];
+		WHEN 0 => ACC_CNT[].d = ACC_CNT[] - 1;
 	END CASE;
 
-	ALT_ACC	= DFF(VCC,UWRC7,/RESET,);	-- rev lc_A28_3: clk=lc_A28_7
+	WR_C7	= DFF((/IOM or DFF(!/IOM,CLK42,,) or /WR or DFF(!(DCP[] == B"1100X111"),CLK42,,)),CLK42,,);
+	ALT_ACC	= DFF(VCC,WR_C7,/RESET,);
 
-	(AAGR[].ena,XCNT[].ena,XAGR[].ena)	= FRACTION_STEP_EN;	-- rev: ena ab_a30 = lc_A28_2
+	(AAGR[].ena,XCNT[].ena,XAGR[].ena)	= LCELL(!WR_C7 or (ACC_DIR1 & ACC_C));
 	(AAGR[].clk,XCNT[].clk,XAGR[].clk)	= CLK42;
 
 	XCNT_AGR[15..0] = (XCNT[],XAGR[]) + (B"000000",AAGR[]);
 
-	CASE USEL IS
+	CASE !DFF(START_ACC,CLK42,,) IS
 		WHEN 1 => AAGR[].d	= AAGR[];
 				  (XCNT[].d,XAGR[].d) = XCNT_AGR[15..0];
 		WHEN 0 => AAGR[].d = (AI9,AI8,DI[]);
@@ -275,6 +273,17 @@ BEGIN
 
 --  == accelerator datas ==
 
+	-- Ранний авторский GLISSER из комментариев: сравниваются уже MDO-регистры.
+	-- Два comparator FF независимы; существующий byte-select выбирает их Q.
+	GLISS_BYTE_FF[].clk = CLK42;
+	GLISS_BYTE_FF0.d = (MDO[7..0] == H"FF");
+	GLISS_BYTE_FF1.d = (MDO[15..8] == H"FF");
+	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
+		WHEN 0 => MD[] = MDI[7..0]; GLISSER = GLISS_BYTE_FF0;
+		WHEN 1 => MD[] = MDI[15..8]; GLISSER = GLISS_BYTE_FF1;
+	END CASE;
+
+% Поздняя альтернатива донора (единый GLISS_R FF после входного mux):
 	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
 		WHEN 0 => MD[] = MDI[7..0];
 --				  GLISSER = DFF((MDO[7..0] == H"FF"),CLK42,,);
@@ -285,12 +294,14 @@ BEGIN
 	GLISS_R.clk	= CLK42;
 	CASE ACC_DIR1 IS
 		WHEN 0 => GLISS_R = LCELL(DI[] == H"FF");
-		WHEN 1 => GLISS_R = LCELL(VDWQ[7..4] == H"F") & LCELL(VDWQ[3..0] == H"F");
+		WHEN 1 => GLISS_R = LCELL(RAM.q[7..4] == H"F") & LCELL(RAM.q[3..0] == H"F");
 	END CASE;
 	GLISSER	= GLISS_R;
 
---	MDO[].clk	= !CLK42;
-	MDO[].clk	= CLK42;
+%
+
+	MDO[].clk	= !CLK42;
+--	MDO[].clk	= CLK42;
 
 	MDO[].ena	= CAS;
 
@@ -309,10 +320,15 @@ BEGIN
 
 	CASE LCELL(/IO & ACC_DIR1) IS
 		WHEN 0 => MDO[].d = (MDOY[],MDOX[]);
-		WHEN 1 => MDO[].d = (VDWQ[7..0],VDWQ[7..0]);
+		WHEN 1 => MDO[].d = (RAM.q[7..0],RAM.q[7..0]);
 	END CASE;
 
-%	DO[].clk=DFF(MC_END,!CLK42), ena=VCC, d=MD[] — донорский регистр снят %
+--	Поздняя альтернатива: DO[].clk = DFF(MC_END,!CLK42,,), ena=VCC.
+	-- BASE203: отдельный captured read enable; источник C22_3 не DCP A26_1.
+	READ_CAPTURE_ENABLE = DFF(!MC_END,CLK42,,);
+	DO[].clk		= !CLK42;
+	DO[].ena		= READ_CAPTURE_ENABLE;
+	DO[].d			= MD[];
 
 --	== accelerator functions ==
 
@@ -323,36 +339,48 @@ BEGIN
 	XMDH[].clk		= !CLK42;
 	XMDH[]			= MDI[15..8];
 
---	esb5 ПЕРЕНЕСЁН в DCP (вариант B, rev-фэйтфул):
---	data ← E23-RMW-банк DCP (silicon-форма XMD CASE FN_ACC: BE/B6/AE/A6 =
---	or/xor/and через PORT_ADDR_D[]+VDWQ-feedback), addr ← A28_3-муксы (donor RAM_ADR),
---	wren ← A28_5 (donor RAM_WR). XMD[]/RAM_ADR[]/RAM_WR — донорский путь, снят.
---	XMD[].clk		= !CLK42;
---	CASE FN_ACC[1..0] IS
---		WHEN 0 => XMD[] = MD[];					% BE %
---		WHEN 1 => XMD[] = MD[] or RAM.q[7..0];	% B6 %
---		WHEN 2 => XMD[] = MD[] xor RAM.q[7..0];	% AE %
---		WHEN 3 => XMD[] = MD[] & RAM.q[7..0];		% A6 %
---	END CASE;
---	CASE ALT_ACC IS
---		WHEN 0 => RAM_ADR[] = ACC_CNT[];
---		WHEN 1 => RAM_ADR[] = XCNT[];
---	END CASE;
+	XMD[].clk		= !CLK42;
+	CASE FN_ACC[1..0] IS
+		WHEN 0 =>
+			XMD[] = MD[];					% BE %
+		WHEN 1 =>
+			XMD[] = MD[] or RAM.q[7..0];	% B6 %
+		WHEN 2 =>
+			XMD[] = MD[] xor RAM.q[7..0];	% AE %
+		WHEN 3 =>
+			XMD[] = MD[] & RAM.q[7..0];		% A6 %
+	END CASE;
+
+	CASE ALT_ACC IS
+		WHEN 0 => RAM_ADR[] = ACC_CNT[];
+		WHEN 1 => RAM_ADR[] = XCNT[];
+	END CASE;
 
 	ACC_TIME		= LCELL((!ACC_END or !DFFE(ACC_END,CLK42,,,(CT1 & CT2))));
 
-	RAMQ[]			= VDWQ[7..0];	-- esb5.q из DCP -> VIDEO2 (ecN_e = RAMQ[N-1])
-	UCNT[]			= ACC_CNT[];	-- rev uadd0[] -> DCP esb5-addr
-	ABAH[] = XCNT[];	-- actual ab_a30[15..8] integer byte -> DCP RAM address; low8 XAGR is fractional
+--	RAM_WR			= DFF((!/RD & (!ACC_GO & CT0) & ACC_TIME),CLK42,,);
+	RAM_WR			= DFF((!/RD & !ACC_GO & CT0),CLK42,,);
+
+	RAM.wren 		= RAM_WR;
+	RAM.data[] 		= XMD[];	-- R75: w8, дублирование старшей половины отсутствует
+--	RAM.wraddress[] = ACC_CNT[];
+	RAM.wraddress[] = RAM_ADR[];
+	RAM.wrclock		= CLK42;
+	RAM.wrclken		= VCC;
+	RAM.rden		= VCC;
+--	RAM.rdaddress[] = ACC_CNT[];
+	RAM.rdaddress[] = RAM_ADR[];
+	RAM.rdclock		= CLK42;
+	RAM.rdclken		= VCC;
 
 	AA[].clk	= CLK42;
 --	AA[].ena	= START_ACC or (ACC_DIR5 & !ACC_GO & ACC_GO_1);
-	AA[].ena	= U2E;	-- rev: ena uadd2 = lc_B25_3
+	AA[].ena	= LCELL(START_ACC or (ACC_DIR5 & !(CAS or START_ACC) & (ACC_GO or (ACC_GO_1 & ACC_DIR6))));
 
-	CASE USEL IS
-		WHEN 1 => AA[].d = AA[] + (B"00000000000000",ADDRESS_DOUBLE_STEP,!ADDRESS_DOUBLE_STEP);	-- rev uadd2: +1/+2 по lc_A33_7
-		WHEN 0 => AA[].d = AI[];
---		WHEN 0 => AA[].d = AA[] + 1;
+	CASE DFF(START_ACC,CLK42,,) IS
+		WHEN 1 => AA[].d = AI[];
+--		WHEN 0 => AA[].d = AA[] + (B"00000000000000",ACC_DIR6,!ACC_DIR6);
+		WHEN 0 => AA[].d = AA[] + 1;
 	END CASE;
 
 	AO[] = (AA[15..0]);
