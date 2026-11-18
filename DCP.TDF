@@ -202,11 +202,9 @@ VARIABLE
 
 -- Early author address mux: memory/port phase and the I/O phase.
 	IO_STB : DFF; -- one-shot port flag, existing !/IO clock
-	IO_STB_CLEAR_N : DFF; -- b2aa existing registered clear/rearm state
 	GA_SEL : NODE;
 	MA_NEXT[11..0] : NODE;
-	MA_MUX_N0,MA_MUX_N1,MA_MUX_N2,MA_MUX_N3,MA_MUX_N4,MA_MUX_N6,MA_MUX_N8,MA_MUX_N9 : LCELL;
-	MA_INPUT_N0,MA_INPUT_N1,MA_INPUT_N2,MA_INPUT_N3,MA_INPUT_N4,MA_INPUT_N6,MA_INPUT_N8,MA_INPUT_N9 : LCELL; -- existing raw terminal copies
+	MA_P0,MA_P1,MA_P2,MA_P3,MA_P4,MA_P6,MA_P8,MA_P9 : LCELL;
 
 	WR_AWGX		: NODE;
 	WR_AWG_STATE : DFFE; -- existing early toggle register, opposite phase of native lc_C16_2
@@ -384,10 +382,7 @@ BEGIN
 
 	-- Shared graphic-address mux GA[] above serves VIDEO and MA.
 	IO_STB.clk = !/IO;
---	IO_STB.clrn = LCELL(!IO_STB or !/IO); -- BASE203 direct-clear alternative
-	IO_STB_CLEAR_N.clk = CLK42;
-	IO_STB_CLEAR_N.d = !IO_STB or !/IO;
-	IO_STB.clrn = IO_STB_CLEAR_N;
+	IO_STB.clrn = LCELL(!IO_STB or !/IO);
 	IO_STB.d = /M1;
 	GA_SEL = GRAF;
 
@@ -402,33 +397,25 @@ BEGIN
 			MA_NEXT2 = !IO_STB or MEM.q[2];
 			MA_NEXT[1..0] = A[6..5];
 	END CASE;
-	-- Existing raw negative mux head and copy; author MA_NEXT CASE stays positive.
-	MA_MUX_N0 = !MA_NEXT[0];
-	MA_INPUT_N0 = MA_MUX_N0;
-	MA_[0].d = !MA_INPUT_N0;
-	MA_MUX_N1 = !MA_NEXT[1];
-	MA_INPUT_N1 = MA_MUX_N1;
-	MA_[1].d = !MA_INPUT_N1;
-	MA_MUX_N2 = !MA_NEXT[2];
-	MA_INPUT_N2 = MA_MUX_N2;
-	MA_[2].d = !MA_INPUT_N2;
-	MA_MUX_N3 = !MA_NEXT[3];
-	MA_INPUT_N3 = MA_MUX_N3;
-	MA_[3].d = !MA_INPUT_N3;
-	MA_MUX_N4 = !MA_NEXT[4];
-	MA_INPUT_N4 = MA_MUX_N4;
-	MA_[4].d = !MA_INPUT_N4;
+	-- Positive functions at existing MA terminal LCELLs (MA_P0 keeps ACF name).
+	MA_P0 = MA_NEXT[0];
+	MA_[0].d = MA_P0;
+	MA_P1 = MA_NEXT[1];
+	MA_[1].d = MA_P1;
+	MA_P2 = MA_NEXT[2];
+	MA_[2].d = MA_P2;
+	MA_P3 = MA_NEXT[3];
+	MA_[3].d = MA_P3;
+	MA_P4 = MA_NEXT[4];
+	MA_[4].d = MA_P4;
 	MA_[5].d = MA_NEXT[5];
-	MA_MUX_N6 = !MA_NEXT[6];
-	MA_INPUT_N6 = MA_MUX_N6;
-	MA_[6].d = !MA_INPUT_N6;
+	MA_P6 = MA_NEXT[6];
+	MA_[6].d = MA_P6;
 	MA_[7].d = MA_NEXT[7];
-	MA_MUX_N8 = !MA_NEXT[8];
-	MA_INPUT_N8 = MA_MUX_N8;
-	MA_[8].d = !MA_INPUT_N8;
-	MA_MUX_N9 = !MA_NEXT[9];
-	MA_INPUT_N9 = MA_MUX_N9;
-	MA_[9].d = !MA_INPUT_N9;
+	MA_P8 = MA_NEXT[8];
+	MA_[8].d = MA_P8;
+	MA_P9 = MA_NEXT[9];
+	MA_[9].d = MA_P9;
 	MA_[10].d = MA_NEXT[10];
 	MA_[11].d = MA_NEXT[11];
 	MA[] = MA_[];

@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN SP2000_b2aa09581902300d
+SUBDESIGN SP2000_983915261f8c2b7a
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -255,8 +255,7 @@ VARIABLE
 
 	RDXAF		: NODE;
 
---	IO_WRITE_ACTIVE : DFF; -- BASE203 registered general-port alternative
-	CBL_WRITE_CLOCK : DFF; -- b2aa existing /IOM-qualified configuration/write clock
+	IO_WRITE_ACTIVE : DFF;
 
 	SOFT_COUNT_CLEAR_N : DFF;
 
@@ -285,13 +284,10 @@ BEGIN
 
 --	/IOWR			= DFF((/WR or /IO),CLK42,,!/IO); -- later registered port-strobe alternative
 	-- TOP: зарегистрированный строб; DCP имеет собственный comb PORT_WRITE_CLK.
---	IO_WRITE_ACTIVE.clk = CLK42;
---	IO_WRITE_ACTIVE.clrn = !/IO;
---	IO_WRITE_ACTIVE.d = !/WR;
---	/IOWR = !IO_WRITE_ACTIVE;
-	/IOWR = LCELL(/IO or /WR); -- actual b2aa general port clock
-	CBL_WRITE_CLOCK.clk = CLK42;
-	CBL_WRITE_CLOCK.d = DECODE./IOM or /WR; -- existing raw producer, no async controls
+	IO_WRITE_ACTIVE.clk = CLK42;
+	IO_WRITE_ACTIVE.clrn = !/IO;
+	IO_WRITE_ACTIVE.d = !/WR;
+	/IOWR = !IO_WRITE_ACTIVE;
 
 	BORDER[].clk	= /IOWR;
 	BORDER[].ena	= (DCPP[] == B"1100X010"); -- C2/C8
@@ -702,8 +698,8 @@ END GENERATE;
 
 	DOUBLE_CAS	= ACC.DOUBLE_CAS;
 
---	CAS_A	= LCELL(DECODE.CAS); -- explicit duplicate alternative
-	CAS_A	= (DECODE.CAS); -- actual one shared CAS qualifier
+--	CAS_A	= LCELL(DECODE.CAS); -- BASE203 forced duplicate alternative
+	CAS_A	= (DECODE.CAS); -- 9839 actual single shared native CAS qualifier
 
 	CASXE0	= LCELL((MCA0 == 0) or ((MCA0 == 1) & DOUBLE_CAS));
 	CASXE1	= LCELL((MCA0 == 1) or ((MCA0 == 0) & DOUBLE_CAS));
@@ -882,7 +878,7 @@ END GENERATE;
 
 --  =====================================================
 
-	ALL_MODE[7..0].clk	= CBL_WRITE_CLOCK;
+	ALL_MODE[7..0].clk	= /IOWR;
 	ALL_MODE[7..0].ena	= DFF((DCPP[] == B"11000011"),CLK42,,);	-- C3
 	ALL_MODE[].d		= D[];
 	ALL_MODE[].prn		= /RESET;
@@ -921,7 +917,7 @@ END GENERATE;
 --	Поздняя альтернатива: CBL_INT = DFF(GND,!CBL_CNT6,,(CBL_INT_ENA & (/IO or /M1)));
 	CBL_INT = VCC;
 
-	CBL_XX[].clk	= CBL_WRITE_CLOCK;
+	CBL_XX[].clk	= /IOWR;
 	CBL_XX[].ena	= DFF((DCPP[] == B"10001001"),CLK42,,);	-- 89
 	CBL_XX[]		= D[];
 
@@ -975,7 +971,7 @@ END GENERATE;
 	CBL_IND			= CBL_CNT7; -- early read status, без позднего WA/page XOR
 
 --	== R75: ранний COVOX (w11, прямая адресация страницей A[15..8]) ==
-	CBL_WR	= DFF((DCPP[] == B"10001000"),CLK42,,) & !CBL_WRITE_CLOCK; -- 88
+	CBL_WR	= DFF((DCPP[] == B"10001000"),CLK42,,) & !/IOWR; -- 88
 
 	CBL.wren 		= CBL_WR;
 

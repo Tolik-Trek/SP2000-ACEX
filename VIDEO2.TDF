@@ -108,8 +108,7 @@ VARIABLE
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
 	RSVA[8..0]	: NODE;
-	VLA_MUX_N[10..0] : LCELL; -- existing negative vector mux terminals
-	VLA_INPUT_N[10..0] : LCELL; -- existing head-to-IOC input copies, raw19boundary proof
+	VLA_MUX[10..0] : LCELL; -- positive terminals of the existing vector address mux
 	VLA_NEXT[17..0] : NODE; -- author vector CASE, positive terminal functions
 --	RSVA[8..0]	: DFF;
 
@@ -457,44 +456,33 @@ IF MODE == "SPRINTER" GENERATE
 	-- Positive functions at the existing VLA mux terminal LCELLs.
 	VLA[0].d = VLA_NEXT[0];
 	VLA[1].d = VLA_NEXT[1];
-	VLA_MUX_N[0] = !VLA_NEXT[2];
-	VLA_INPUT_N[0] = VLA_MUX_N[0];
-	VLA[2].d = !VLA_INPUT_N[0];
-	VLA_MUX_N[1] = !VLA_NEXT[3];
-	VLA_INPUT_N[1] = VLA_MUX_N[1];
-	VLA[3].d = !VLA_INPUT_N[1];
-	VLA_MUX_N[2] = !VLA_NEXT[4];
-	VLA_INPUT_N[2] = VLA_MUX_N[2];
-	VLA[4].d = !VLA_INPUT_N[2];
+	VLA_MUX[0] = VLA_NEXT[2];
+	VLA[2].d = VLA_MUX[0];
+	VLA_MUX[1] = VLA_NEXT[3];
+	VLA[3].d = VLA_MUX[1];
+	VLA_MUX[2] = VLA_NEXT[4];
+	VLA[4].d = VLA_MUX[2];
 	VLA[5].d = VLA_NEXT[5];
 	VLA[6].d = VLA_NEXT[6];
 	VLA[7].d = VLA_NEXT[7];
 	VLA[8].d = VLA_NEXT[8];
 	VLA[9].d = VLA_NEXT[9];
-	VLA_MUX_N[3] = !VLA_NEXT[10];
-	VLA_INPUT_N[3] = VLA_MUX_N[3];
-	VLA[10].d = !VLA_INPUT_N[3];
-	VLA_MUX_N[4] = !VLA_NEXT[11];
-	VLA_INPUT_N[4] = VLA_MUX_N[4];
-	VLA[11].d = !VLA_INPUT_N[4];
-	VLA_MUX_N[5] = !VLA_NEXT[12];
-	VLA_INPUT_N[5] = VLA_MUX_N[5];
-	VLA[12].d = !VLA_INPUT_N[5];
-	VLA_MUX_N[6] = !VLA_NEXT[13];
-	VLA_INPUT_N[6] = VLA_MUX_N[6];
-	VLA[13].d = !VLA_INPUT_N[6];
-	VLA_MUX_N[7] = !VLA_NEXT[14];
-	VLA_INPUT_N[7] = VLA_MUX_N[7];
-	VLA[14].d = !VLA_INPUT_N[7];
-	VLA_MUX_N[8] = !VLA_NEXT[15];
-	VLA_INPUT_N[8] = VLA_MUX_N[8];
-	VLA[15].d = !VLA_INPUT_N[8];
-	VLA_MUX_N[9] = !VLA_NEXT[16];
-	VLA_INPUT_N[9] = VLA_MUX_N[9];
-	VLA[16].d = !VLA_INPUT_N[9];
-	VLA_MUX_N[10] = !VLA_NEXT[17];
-	VLA_INPUT_N[10] = VLA_MUX_N[10];
-	VLA[17].d = !VLA_INPUT_N[10];
+	VLA_MUX[3] = VLA_NEXT[10];
+	VLA[10].d = VLA_MUX[3];
+	VLA_MUX[4] = VLA_NEXT[11];
+	VLA[11].d = VLA_MUX[4];
+	VLA_MUX[5] = VLA_NEXT[12];
+	VLA[12].d = VLA_MUX[5];
+	VLA_MUX[6] = VLA_NEXT[13];
+	VLA[13].d = VLA_MUX[6];
+	VLA_MUX[7] = VLA_NEXT[14];
+	VLA[14].d = VLA_MUX[7];
+	VLA_MUX[8] = VLA_NEXT[15];
+	VLA[15].d = VLA_MUX[8];
+	VLA_MUX[9] = VLA_NEXT[16];
+	VLA[16].d = VLA_MUX[9];
+	VLA_MUX[10] = VLA_NEXT[17];
+	VLA[17].d = VLA_MUX[10];
 
 --	choose V-RAM komplect
 
