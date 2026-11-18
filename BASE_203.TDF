@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN SP2000_983915261f8c2b7a
+SUBDESIGN BASE_203
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -698,8 +698,8 @@ END GENERATE;
 
 	DOUBLE_CAS	= ACC.DOUBLE_CAS;
 
---	CAS_A	= LCELL(DECODE.CAS); -- BASE203 forced duplicate alternative
-	CAS_A	= (DECODE.CAS); -- 9839 actual single shared native CAS qualifier
+	CAS_A	= LCELL(DECODE.CAS);
+--	CAS_A	= (DECODE.CAS);
 
 	CASXE0	= LCELL((MCA0 == 0) or ((MCA0 == 1) & DOUBLE_CAS));
 	CASXE1	= LCELL((MCA0 == 1) or ((MCA0 == 0) & DOUBLE_CAS));

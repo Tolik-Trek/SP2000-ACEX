@@ -19,9 +19,8 @@
 --  their respective licensors.  No other licenses, including any licenses
 --  needed under any third party's intellectual property, are provided herein.
 --
-CHIP SP2000_983915261f8c2b7a
+CHIP BASE_203
 BEGIN
-	"|acceler:ACC|AA15" : LOCATION = LC4_B26;
 	|CASXE1 :	LOCATION = LC8_B36;
 	|CASXE0 :	LOCATION = LC7_B36;
 	|CASX_3 :	LOCATION = LC6_B36;
@@ -285,7 +284,7 @@ END;
 
 IGNORED_ASSIGNMENTS
 BEGIN
-	FIT_IGNORE_TIMING = OFF;
+	FIT_IGNORE_TIMING = ON;
 	DEMOTE_SPECIFIC_LCELL_ASSIGNMENTS_TO_LAB_ASSIGNMENTS = OFF;
 	IGNORE_LOCAL_ROUTING_ASSIGNMENTS = OFF;
 	IGNORE_DEVICE_ASSIGNMENTS = OFF;
