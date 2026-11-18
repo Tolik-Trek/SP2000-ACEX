@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN SP2000_3a9933193ed12546
+SUBDESIGN SP2000_d4141857840200ac
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -233,8 +233,8 @@ VARIABLE
 	AY/PORTS[7..0]	: LCELL;
 
 	V_WRXX[3..0]: LCELL;
---	V_WRX[3..0]	: LCELL; -- 36e serial OE buffer alternative
-	V_WRX[3..0]	: NODE; -- 3a99 OE LCELLs are parallel full masks V_WEY
+	V_WRX[3..0]	: LCELL;
+--	V_WRX[3..0]	: NODE;
 
 	KEY_IO		: NODE;
 
@@ -389,7 +389,7 @@ BEGIN
 
 	D_OUT = !(/IO or /RD or LCELL((DCPP[7..4] == 0) or (DCPP[7..4] == 3))) or RD_RAM;
 
--- 3a99: parallel registered-VLA masks independently drive /V_WR and VD OE.
+-- 36e: each registered VLA nibble mask drives /V_WR and one separate VD OE buffer.
 	V_WRXX[] = !SVIDEO.V_WEN[]; -- surviving unused author alternative, pruned when not consumed
 
   	V_WRX3 = !SVIDEO.V_WEN3;

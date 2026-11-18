@@ -195,7 +195,7 @@ VARIABLE
 
 	SCR_ENA		: DFFE;
 	V_WR_[3..0]	: LCELL;
-	V_WEY[3..0]	: LCELL; -- 3a99 parallel full-mask copies for VD OE
+	V_WEY[3..0]	: NODE; -- 36e direct mask outputs; OE fanout LCELLs are in TOP
 
 	V_WE_R		: NODE;
 
@@ -678,17 +678,17 @@ IF MODE == "SPRINTER" GENERATE
 --	V_WEX.prn	= (DFF(GND,CLK42,,!V_WEX));
 
 
-	-- 3a99 measured V_WE chain: inverse-Q tap and one unity buffer, then all parallel nibble masks.
+	-- D414 actual chain: inverse-Q tap, direct/delayed AND, two unity buffers; all nibble masks use the final tap.
 	V_WEMMM	= LCELL(V_WE);
-	V_WEMMN	= LCELL(V_WEMMM);
-	V_WEMMO	= V_WEMMN; -- 3a99 has exactly two actual V_WE tap LCELLs
-	V_WEMM	= V_WEMMO;
+	V_WEMMN	= LCELL(V_WE & V_WEMMM); -- D414 direct/delayed AND tap
+	V_WEMMO	= LCELL(V_WEMMN);
+	V_WEMM	= LCELL(V_WEMMO); -- D414 fourth actual V_WE terminal
 
-	V_WRM	= V_WEMMO;
-	V_WRM2	= V_WEMMO;
+	V_WRM	= V_WEMM;
+	V_WRM2	= V_WEMM;
 
-	V_WEM	= V_WEMMO;
-	V_WEM2	= V_WEMMO;
+	V_WEM	= V_WEMM;
+	V_WEM2	= V_WEMM;
 
 	V_EN3	= (!(!VLA1 & (!VLA0 or DOUBLE)));
 	V_EN2	= (!(!VLA1 & (VLA0 or DOUBLE)));
@@ -703,10 +703,10 @@ IF MODE == "SPRINTER" GENERATE
 	V_WR_0	= V_WRM or V_EN0;
 
 -- 36e masks use the registered output address VLA, not the earlier VXA capture bank.
-	V_WEY3	= V_WEM or V_EN3;
-	V_WEY2	= V_WEM or V_EN2;
-	V_WEY1	= V_WEM or V_EN1;
-	V_WEY0	= V_WEM or V_EN0;
+	V_WEY3	= V_WR_3;
+	V_WEY2	= V_WR_2;
+	V_WEY1	= V_WR_1;
+	V_WEY0	= V_WR_0;
 
 	V_WR[]	= V_WR_[];
 	V_WEN[]	= V_WEY[];
