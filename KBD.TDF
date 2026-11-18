@@ -1,429 +1,224 @@
--- Early keyboard: serial receiver state, prefix/modifier flags and key translation RAM. Original RAM bit ordering is explicit.
--- Named control/data banks and preserved physical helpers; independent source review pending.
-INCLUDE "lpm_ram_dp";
+
+	TITLE "ZX-Keyboard";
+
 INCLUDE "lpm_ram_dq";
+
 SUBDESIGN kbd
-(
-	/IO : INPUT;
-	A[15..0] : INPUT;
-	/RF : INPUT;
-	TG42 : INPUT;
-	KBD_CC : INPUT;
-	KBD_DD : INPUT;
-	KB_CLOCK_DIV_D : INPUT;
-	ALL_MODE0_N : INPUT;
-	KB_CTRL : OUTPUT;
-	KB_SHIFT : OUTPUT;
-	KB_MA[2..0] : OUTPUT;
-	KB_RESET_REQUEST : OUTPUT;
-	KB_F12_N : OUTPUT;
-	KB_IRQ_N : OUTPUT;
-	KB_PRESSED[5..0] : OUTPUT;
+	(
+	CLK42		: INPUT;	-- full sinc 42MHz
+	CLK_K		: INPUT;	-- sinc input 15KHz
+	KBD_CC		: INPUT;	-- sinc KBD
+	KBD_DD		: INPUT;	-- data KBD
+
+	/RF			: INPUT;	-- /rfsh
+	/IO			: INPUT;	-- /IO_CYCLE_N
+	/IOM		: INPUT;
+	/M1			: INPUT;
+
+	A[15..8]	: INPUT;
+
+	KBO[7..0]	: OUTPUT;	-- output
+	KDQ[7..0]	: OUTPUT;	-- rev: esb2.q (ec*_b) -> DCP read-path
+
+	KB_RESET	: OUTPUT;
+
+	KB_F12		: OUTPUT;
+	KB_CTRL		: OUTPUT;
+	KB_ALT		: OUTPUT;
+	KB_SH		: OUTPUT;
+
+	ENA			: INPUT;
+	INT_ENA		: INPUT;
+	INT			: OUTPUT;
+
+	KB_RECEIVE_BITS[10..1] : OUTPUT;
+	KB_RECEIVE_COUNT_N[2..0] : OUTPUT;
+
+	KB_SCAN_COUNT[2..0] : INPUT;
+ KB_RAW_CLOCK, KB_COUNT_CLOCK : INPUT;
+ KB_ONE_TICK : OUTPUT;
+	KB_RELEASE, KB_EXT_PREFIX : OUTPUT;
 )
 VARIABLE
-	KB_DATA[9..0] : NODE;
-	KB_COUNT_N[2..0] : NODE;
-	KB_CTRL : NODE;
-	KB_ALT : NODE;
-	KB_SHIFT : NODE;
-	KB_BREAK : NODE;
-	KB_EXT : NODE;
-	KD : lpm_ram_dq WITH (lpm_width=8,lpm_widthad=8,lpm_file="KBD_INI2.MIF",lpm_outdata="UNREGISTERED");
-	KD_Q[7..0] : NODE;
-	KB_MA[2..0] : NODE;
-	RXA[1..0] : NODE;
-	KB_ROW_LATCH[2..0] : NODE;
-	KDXX[5..0] : NODE;
-	KDX[5..0] : NODE;
-	KA[7..0] : NODE;
-	KB_RESET_CTRL_CODE : NODE;
-	KB_EXT_N : NODE;
-	KB_MODIFIER_CLASS : NODE;
-	KB_SHIFT_CLASS : NODE;
-	KB_RESET_REQUEST : NODE;
-	KB_F12_N : NODE;
-	KB_CTRL_CODE : NODE;
-	KB_ALT_CODE : NODE;
-	KB_F12_CODE : NODE;
-	KB_ADDR_ROW1 : NODE;
-	KB_CTRL_ALT_CODE_LO : NODE;
-	KB_EXT_CODE_LO : NODE;
-	KB_COUNT0_D : NODE;
-	KB_COUNT1 : NODE;
-	KB_COUNT2_D : NODE;
-	KB_COUNT1_D : NODE;
-	KB_IRQ_N : NODE;
-	RXA_CLEAR_D : NODE;
-	WR_KBD : NODE;
-	K_CLK : NODE;
-	KB_SCAN_SELECT : NODE;
-	KB_SHIFT_CLK : NODE;
-	KB_BITCOUNT_CLRN : NODE;
-	KB_ADDR_ROW2 : NODE;
-	KB_RAM_ADDR1_N : NODE;
-	KB_SHIFT_CODE : NODE;
-	KB_RAM_COMMAND : NODE;
-	KB_RAM_ADDR0_N : NODE;
-	KB_ADDR_ROW0 : NODE;
-	KB_SCAN_VALUE_D : NODE;
-	KB_SCAN_MUX_LO : NODE;
-	KB_SCAN_A15 : NODE;
-	KB_SCAN_MUX_HI : NODE;
-	KB_SCAN_A9_A11 : NODE;
-	KB_CODE_TERM1 : CARRY;
-	KB_CODE_TERM2 : CARRY;
-	KB_CODE_TERM3 : CARRY;
-	KB_CODE_TERM4 : CARRY;
-	KB_CODE_TERM5 : CARRY;
-	KB_PRESSED[5..0] : NODE;
-	KB_SCAN_CLRN : NODE;
-	KB_SCAN_RESET : NODE;
-	-- Explicit instances preserve FF source names across module ports.
-	KB_ALT_R : DFFE;
-	KB_BITCOUNT_CLRN_R : DFFE;
-	KB_BREAK_R : DFFE;
-	KB_COUNT0_D_R : DFFE;
-	KB_COUNT1_D_R : DFFE;
-	KB_COUNT2_D_R : DFFE;
-	KB_COUNT_N_R[2..0] : DFFE;
-	KB_CTRL_R : DFFE;
-	KB_DATA_R[9..0] : DFFE;
-	KB_EXT_R : DFFE;
-	KB_F12_N_R : DFFE;
-	KB_IRQ_N_R : DFFE;
-	KB_MA_R[2..0] : DFFE;
-	KB_PRESSED_R[5..0] : DFFE;
-	KB_RAM_ADDR0_N_R : DFFE;
-	KB_RAM_ADDR1_N_R : DFFE;
-	KB_RESET_REQUEST_R : DFFE;
-	KB_ROW_LATCH_R[2..0] : DFFE;
-	KB_SCAN_CLRN_R : DFFE;
-	KB_SCAN_VALUE_D_R : DFFE;
-	KB_SHIFT_R : DFFE;
-	KB_SHIFT_CLK_R : DFFE;
-	KDX_R[5..0] : DFFE;
-	KDXX_R[5..0] : DFFE;
-	K_CLK_R : DFFE;
-	RXA_R[1..0] : DFFE;
-	RXA_CLEAR_D_R : DFFE;
+    KB_RECEIVE_R[10..1] : DFF;
 
-	KB_SCAN_MUX_LO_LUT_TERM1 : NODE;
+    KB_COUNT_N_R[2..0] : DFF;
+
+    KB_BIT_CLOCK_R, KB_CLOCK_CLEAR_N_R, KB_ZERO_TICK_R, KB_ONE_TICK_R : DFF;
+
+    KB_CT[2..0] : NODE;
+
+    KB_D[10..0] : NODE;
+
+    KB_OFF : DFFE;
+
+    KB_EXT : DFF;
+
+    KB_ALT : DFF;
+
+    KB_CTRL : DFF;
+
+    KB_SH : DFF;
+
+    KB_CTRL_X : NODE;
+
+    KB_ALT_X : NODE;
+
+    KB_SH_X : NODE;
+
+    KB_XXX : NODE;
+
+    KB_RESET : DFF;
+
+    RXA[1..0] : DFFE;
+
+    K_CLK : NODE;
+
+    KA[15..0] : NODE;
+
+    KB_MA[2..0] : NODE;
+
+    KB_MXA : NODE;
+
+    KDCA[2..0] : LCELL;
+
+    KDD[7..0] : DFF;
+
+    KBD[5..0] : DFF;
+
+    KD[7..0] : NODE;
+
+    KDX[5..0] : DFF;
+
+    KDXX[5..0] : DFF;
+
+    WR_KBD : NODE;
+
+    KB_OFL : NODE;
 
 BEGIN
 
-	-- Private physical helper of this bank; one instance, no cross-module cut.
-	KB_SCAN_MUX_LO_LUT_TERM1 = LCELL((A[9] & !KB_MA[2]) or (KB_MA[2] & A[13]));
+ -- OLD KBD.TDF:67..85 receive/count/prefix architecture. Early28a stores
+ -- the complemented countdown: INIT/async clear0 means positive count7.
+ KB_BIT_CLOCK_R.clk = CLK42; KB_BIT_CLOCK_R = !KB_RAW_CLOCK;
+ KB_CLOCK_CLEAR_N_R.clk = CLK42; KB_CLOCK_CLEAR_N_R = KB_RAW_CLOCK;
+ KB_RECEIVE_R[].clk = KB_BIT_CLOCK_R;
+ KB_RECEIVE_R[] = (KBD_DD,KB_RECEIVE_R[10..2]);
+ KB_COUNT_N_R[].clk = KB_COUNT_CLOCK;
+ KB_COUNT_N_R[].clrn = KB_CLOCK_CLEAR_N_R;
+ IF KB_COUNT_N_R[] == 7 THEN KB_COUNT_N_R[] = 7;
+ ELSE KB_COUNT_N_R[] = KB_COUNT_N_R[] + 1; END IF;
+ KB_RECEIVE_BITS[] = KB_RECEIVE_R[];
+ KB_RECEIVE_COUNT_N[] = KB_COUNT_N_R[];
+ KB_ZERO_TICK_R.clk = CLK42; KB_ZERO_TICK_R = KB_COUNT_N_R[] == 7;
+ KB_ONE_TICK_R.clk = CLK42; KB_ONE_TICK_R = KB_COUNT_N_R[] == 6;
+ KB_ONE_TICK = KB_ONE_TICK_R;
+ KB_OFF.clk = KB_ZERO_TICK_R; KB_OFF.ena = !KB_EXT;
+ KB_OFF = KB_D[] == B"XX11110000X";
+ KB_EXT.clk = KB_ONE_TICK_R; KB_EXT = KB_D[] == B"XX11100000X";
+
+	KB_MA[] = KB_SCAN_COUNT[];
+	KB_RELEASE = KB_OFF; KB_EXT_PREFIX = KB_EXT;
+
+    -- Count is exposed positively for the author key decoder, but its real
+    -- storage is the existing low-active F10 bank: clear0 means positive7.
+    -- This preserves native INIT and asynchronous-clear polarity explicitly.
+    KB_CT[] = !KB_RECEIVE_COUNT_N[];
+    KB_D[10..1] = KB_RECEIVE_BITS[];
+    KB_D[0] = GND; -- unused shifted-out stop/start lane, all decoders mask it
+
+	INT		= DFF((KB_CT[] == 0),CLK42,,INT_ENA);
+
+--	KB_CT[].clk	= DFF(CLK_K,CLK42,,);
+
+	KB_CTRL.clk	= !KB_CT2;
+	KB_ALT.clk	= !KB_CT2;
+	KB_SH.clk	= !KB_CT2;
+
+	KB_CTRL_X	= LCELL(KB_D[] == B"XXXXX1X100X");
+	KB_ALT_X	= LCELL(KB_D[] == B"XXXXX1X001X");
+--	rev: cascade-хвоста в этом декоде нет (45→43 цепи) — обычный AND
+	KB_SH_X		= LCELL((KB_D[] == B"XX0X01X0XXX") &
+			   ((KB_D[] == B"XXX1XX1X01X") or (KB_D[] == B"XXX0XX0X10X")));
+	KB_XXX		= LCELL(KB_D[] == B"XX000X0XXXX");
+
+	CASE KB_OFF IS
+		WHEN 0 =>
+			KB_CTRL.d	= (KB_CTRL_X & KB_XXX) or KB_CTRL;
+			KB_ALT.d	= (KB_ALT_X  & KB_XXX) or KB_ALT;
+			KB_SH.d		= (KB_SH_X) or KB_SH;
+		WHEN 1 =>
+			KB_CTRL.d	= !(KB_CTRL_X & KB_XXX) & KB_CTRL;
+			KB_ALT.d	= !(KB_ALT_X  & KB_XXX) & KB_ALT;
+			KB_SH.d		= !(KB_SH_X) & KB_SH;
+	END CASE;
+
+	KB_F12	= DFF(!((KB_XXX & LCELL(KB_D[] == B"XXXXX0X111X")) & !KB_OFF),
+					!KB_CT2,,!(KB_CT[] == 1));
+
+	KB_RESET.clk	= !KB_CT2;
+	KB_RESET.d		= !(KB_ALT_X & (KB_D[] == B"XX011X0XXXX") & !KB_OFF & KB_CTRL & KB_ALT);
+	KB_RESET.prn	= !DFF((KB_CT[] == 1),CLK42,,);
+
+	K_CLK	= DFF(/RF,CLK42,,);
+
+	RXA[].ena	= VCC;
+	RXA[].clk	= K_CLK;
+
+	CASE DFF((!(KB_CT[] == B"01X") & (RXA[] == 0)),CLK42,,) IS
+		WHEN B"1" => RXA[] = GND;
+		WHEN B"0" => RXA[] = (RXA0,!RXA1);
+	END CASE;
+
+	CASE (DFF((/IO & (RXA[] == 0),CLK42,,)),LCELL(KDD7 & KDD6)) IS
+		WHEN B"0X" => KA[15..8]	= (B"101",KDCA[],B"11");
+		WHEN B"10" => KA[15..8]	= (B"110000",KDD7,KDD6);
+		WHEN B"11" => KA[15..8]	= KB_D[8..1];
+	END CASE;
+
+	KB_MXA	= DFF((		(((KB_MA[] == 7) & A15) or ((KB_MA[] == 6) & A14))
+					or	(((KB_MA[] == 5) & A13) or ((KB_MA[] == 4) & A12))
+					or	(((KB_MA[] == 3) & A11) or ((KB_MA[] == 2) & A10))
+					or	(((KB_MA[] == 1) & A9 ) or ((KB_MA[] == 0) & A8 ))),CLK42,,);
+
+	IF !DFF(/IO,CLK42,,) THEN
+		KDCA[]	= KB_MA[];
+	ELSE
+		KDCA[]	= KDD[5..3];
+	END IF;
+
+	KDD[].clk		= RXA0;
+	KDD[].d			= KD[];
+	KDD[7..6].prn	= !KB_CT2;
+
+	KDXX[].clk		= RXA0;
+	KDXX[].d		= !((KD[2..0] == 5),(KD[2..0] == 4),
+						(KD[2..0] == 3),(KD[2..0] == 2),
+						(KD[2..0] == 1),(KD[2..0] == 0));
+
+	KDX[].clk		= RXA1;
+
+	CASE KB_OFF IS
+		WHEN B"0" => KDX[].d	= (KD[5..0] & KDXX[]);
+		WHEN B"1" => KDX[].d	= (KD[5..0] or !KDXX[]);
+	END CASE;
 
-	RXA_R[].prn = VCC;
+--	==============================
 
-	RXA_R[].clrn = VCC;
+	WR_KBD	= K_CLK or !DFF((KB_CT[] == 2),CLK42,,) or !(RXA[] == 3);
 
-	RXA_R[].ena = VCC;
+	KD[] = lpm_ram_dq((B"11",KDX[5..0]),KA[15..8],!WR_KBD,CLK42,)
+		WITH (lpm_width=8,lpm_widthad=8,lpm_file="KBD_INI2.MIF",
+		lpm_outdata="UNREGISTERED");
+	KDQ[] = KD[];	-- rev: esb2.q -> DCP (ec*_b-флаги read-path)
 
-	RXA_R[].clk = K_CLK;
+	KBD[].clk	= CLK42;
+	KBD[].prn	= DFF(VCC,KB_MA2,(!/IO & ENA),);
 
-	KDXX_R[].prn = VCC;
+--	KBD[].prn	= DFF(!/IOM,CLK42,,);
+	KBD[].d		= KBD[] & (KD[5..0] or KB_MXA);
 
-	KDXX_R[].clrn = VCC;
+	KBO[]		= (VCC,VCC,KBD[]);
 
-	KDXX_R[].ena = VCC;
-
-	KDXX_R[].clk = RXA[0];
-
-	KDX_R[].prn = VCC;
-
-	KDX_R[].clrn = VCC;
-
-	KDX_R[].ena = VCC;
-
-	KDX_R[].clk = RXA[1];
-
-	KB_ROW_LATCH_R[].prn = VCC;
-
-	KB_ROW_LATCH_R[].clrn = VCC;
-
-	KB_ROW_LATCH_R[].ena = VCC;
-
-	KB_ROW_LATCH_R[].clk = RXA[0];
-
-	KB_PRESSED_R[].prn = VCC;
-
-	KB_PRESSED_R[].clrn = KB_SCAN_CLRN;
-
-	KB_PRESSED_R[].ena = VCC;
-
-	KB_PRESSED_R[].clk = TG42;
-
-	KB_MA_R[].prn = VCC;
-
-	KB_MA_R[].clrn = !/IO;
-
-	KB_MA_R[].ena = VCC;
-
-	KB_MA_R[].clk = TG42;
-
-	KB_DATA_R[].prn = VCC;
-
-	KB_DATA_R[].clrn = VCC;
-
-	KB_DATA_R[].ena = VCC;
-
-	KB_DATA_R[].clk = KB_SHIFT_CLK;
-
-	KB_COUNT_N_R[].prn = VCC;
-
-	KB_COUNT_N_R[].clrn = KB_BITCOUNT_CLRN;
-
-	KB_COUNT_N_R[].ena = VCC;
-
-	KB_COUNT_N_R[].clk = KB_CLOCK_DIV_D;
-	KB_SCAN_RESET = LCELL(!/IO & ALL_MODE0_N);
-	KB_SCAN_CLRN_R.d = VCC;
-	KB_SCAN_CLRN_R.clk = KB_MA[2];
-	KB_SCAN_CLRN_R.clrn = KB_SCAN_RESET;
-	KB_SCAN_CLRN_R.prn = VCC;
-	KB_SCAN_CLRN_R.ena = VCC;
-	KB_MA_R[0].d = !KB_MA[0];
-
-	KB_RESET_CTRL_CODE = LCELL((KB_CTRL & KB_DATA[6] & !KB_DATA[7]) & CASCADE(!KB_DATA[3] & KB_DATA[5]));
-	KB_EXT_N = LCELL(!KB_EXT);
-	KB_MODIFIER_CLASS = LCELL(!KB_DATA[5] & !KB_DATA[7] & !KB_DATA[6] & !KB_DATA[3]);
-	KB_DATA_R[5].d = KB_DATA[6];
-
-	KB_SHIFT_CLASS = LCELL(KB_DATA[4] & !KB_DATA[7] & !KB_DATA[2] & !KB_DATA[5]);
-	KB_EXT_R.d = KB_DATA[5] & KB_DATA[7] & KB_DATA[6] & KB_EXT_CODE_LO;
-	KB_EXT_R.clk = KB_COUNT1_D;
-	KB_EXT_R.clrn = VCC;
-	KB_EXT_R.prn = VCC;
-	KB_EXT_R.ena = VCC;
-	KB_DATA_R[4].d = KB_DATA[5];
-
-	KB_RESET_REQUEST_R.d = KB_ALT & !KB_BREAK & KB_RESET_CTRL_CODE & KB_ALT_CODE;
-	KB_RESET_REQUEST_R.clk = KB_COUNT_N[2];
-	KB_RESET_REQUEST_R.clrn = !KB_COUNT1_D;
-	KB_RESET_REQUEST_R.prn = VCC;
-	KB_RESET_REQUEST_R.ena = VCC;
-	KB_F12_N_R.d = KB_F12_CODE & !KB_BREAK & KB_MODIFIER_CLASS;
-	KB_F12_N_R.clk = KB_COUNT_N[2];
-	KB_F12_N_R.clrn = !KB_COUNT1;
-	KB_F12_N_R.prn = VCC;
-	KB_F12_N_R.ena = VCC;
-	KB_CTRL_CODE = LCELL(KB_DATA[4] & KB_DATA[2] & KB_CTRL_ALT_CODE_LO);
-	KB_CTRL_R.d = (KB_CTRL & !KB_MODIFIER_CLASS) or (KB_CTRL & !KB_CTRL_CODE) or (!KB_BREAK & KB_CTRL_CODE & KB_MODIFIER_CLASS);
-	KB_CTRL_R.clk = KB_COUNT_N[2];
-	KB_CTRL_R.clrn = VCC;
-	KB_CTRL_R.prn = VCC;
-	KB_CTRL_R.ena = VCC;
-	KB_ALT_CODE = LCELL(KB_DATA[4] & !KB_DATA[2] & !KB_DATA[1] & KB_DATA[0]);
-	KB_ALT_R.d = (KB_ALT & !KB_MODIFIER_CLASS) or (KB_ALT & !KB_ALT_CODE) or (!KB_BREAK & KB_ALT_CODE & KB_MODIFIER_CLASS);
-	KB_ALT_R.clk = KB_COUNT_N[2];
-	KB_ALT_R.clrn = VCC;
-	KB_ALT_R.prn = VCC;
-	KB_ALT_R.ena = VCC;
-	KB_F12_CODE = LCELL(!KB_DATA[4] & KB_DATA[2] & KB_DATA[1] & KB_DATA[0]);
-	KB_ROW_LATCH_R[1].d = KD_Q[2];
-
-	KDX_R[2].d = (KD_Q[2] & KDXX[2]) # (KB_BREAK & !KDXX[2]);
-
-	KDX_R[1].d = (KD_Q[1] & KDXX[1]) # (KB_BREAK & !KDXX[1]);
-
-	KDXX_R[2].d = !KD_Q[5] or KD_Q[1] or !KD_Q[7];
-
-	KDXX_R[5].d = KD_Q[5] or KD_Q[1] or KD_Q[7];
-
-	KB_ADDR_ROW1 = LCELL((/IO & KB_ROW_LATCH[1]) or (!/IO & KB_MA[2]));
-	KDX_R[5].d = (KD_Q[7] & KDXX[5]) # (KB_BREAK & !KDXX[5]);
-
-	KDXX_R[1].d = KD_Q[5] or KD_Q[1] or !KD_Q[7];
-
-	KB_DATA_R[0].d = KB_DATA[1];
-
-	KB_CTRL_ALT_CODE_LO = LCELL(KB_CODE_TERM1 $ GND);
-	KB_DATA_R[3].d = KB_DATA[4];
-
-	KB_EXT_CODE_LO = LCELL(!KB_DATA[4] & KB_CODE_TERM3);
-	KB_DATA_R[6].d = KB_DATA[7];
-
-	KB_BREAK_R.d = KB_CODE_TERM5;
-	KB_BREAK_R.clk = KB_COUNT0_D;
-	KB_BREAK_R.clrn = VCC;
-	KB_BREAK_R.prn = VCC;
-	KB_BREAK_R.ena = KB_EXT_N;
-	KB_DATA_R[2].d = KB_DATA[3];
-
-	KB_DATA_R[1].d = KB_DATA[2];
-
-	KB_COUNT_N_R[1].d = (KB_COUNT_N[0] & !KB_COUNT_N[1]) or (!KB_COUNT_N[0] & KB_COUNT_N[1]) or (KB_COUNT_N[0] & KB_COUNT_N[2]);
-
-	KB_COUNT_N_R[2].d = (KB_COUNT_N[0] & KB_COUNT_N[1]) or KB_COUNT_N[2];
-
-	KB_COUNT0_D_R.d = KB_COUNT_N[2] & KB_COUNT_N[1] & KB_COUNT_N[0];
-	KB_COUNT0_D_R.clk = TG42;
-	KB_COUNT0_D_R.clrn = VCC;
-	KB_COUNT0_D_R.prn = VCC;
-	KB_COUNT0_D_R.ena = VCC;
-	KB_COUNT1 = LCELL(KB_COUNT_N[2] & KB_COUNT_N[1] & !KB_COUNT_N[0]);
-	KB_COUNT2_D_R.d = KB_COUNT_N[2] & !KB_COUNT_N[1] & KB_COUNT_N[0];
-	KB_COUNT2_D_R.clk = TG42;
-	KB_COUNT2_D_R.clrn = VCC;
-	KB_COUNT2_D_R.prn = VCC;
-	KB_COUNT2_D_R.ena = VCC;
-	KB_COUNT1_D_R.d = KB_COUNT_N[2] & KB_COUNT_N[1] & !KB_COUNT_N[0];
-	KB_COUNT1_D_R.clk = TG42;
-	KB_COUNT1_D_R.clrn = VCC;
-	KB_COUNT1_D_R.prn = VCC;
-	KB_COUNT1_D_R.ena = VCC;
-	KB_COUNT_N_R[0].d = !KB_COUNT_N[0] or (KB_COUNT_N[2] & KB_COUNT_N[1]);
-
-	KB_IRQ_N_R.d = !KB_COUNT_N[2] or !KB_COUNT_N[1] or !KB_COUNT_N[0];
-	KB_IRQ_N_R.clk = TG42;
-	KB_IRQ_N_R.clrn = !ALL_MODE0_N;
-	KB_IRQ_N_R.prn = VCC;
-	KB_IRQ_N_R.ena = VCC;
-	RXA_CLEAR_D_R.d = (!RXA[1] & KB_COUNT_N[1] & !RXA[0]) or (!RXA[1] & !KB_COUNT_N[2] & !RXA[0]);
-	RXA_CLEAR_D_R.clk = TG42;
-	RXA_CLEAR_D_R.clrn = VCC;
-	RXA_CLEAR_D_R.prn = VCC;
-	RXA_CLEAR_D_R.ena = VCC;
-	WR_KBD = LCELL(RXA[0] & RXA[1] & KB_COUNT2_D & !K_CLK);
-	RXA_R[1].d = RXA[0] & !RXA_CLEAR_D;
-
-	K_CLK_R.d = /RF;
-	K_CLK_R.clk = TG42;
-	K_CLK_R.clrn = VCC;
-	K_CLK_R.prn = VCC;
-	K_CLK_R.ena = VCC;
-	KB_SCAN_SELECT = LCELL(/IO & !RXA[1] & !RXA[0]);
-	RXA_R[0].d = !RXA[1] & !RXA_CLEAR_D;
-
-	KB_DATA_R[7].d = KB_DATA[8];
-
-	KB_SHIFT_CLK_R.d = !KBD_CC;
-	KB_SHIFT_CLK_R.clk = TG42;
-	KB_SHIFT_CLK_R.clrn = VCC;
-	KB_SHIFT_CLK_R.prn = VCC;
-	KB_SHIFT_CLK_R.ena = VCC;
-	KB_DATA_R[9].d = KBD_DD;
-
-	KB_DATA_R[8].d = KB_DATA[9];
-
-	KB_BITCOUNT_CLRN_R.d = KBD_CC;
-	KB_BITCOUNT_CLRN_R.clk = TG42;
-	KB_BITCOUNT_CLRN_R.clrn = VCC;
-	KB_BITCOUNT_CLRN_R.prn = VCC;
-	KB_BITCOUNT_CLRN_R.ena = VCC;
-	KB_ROW_LATCH_R[2].d = KD_Q[4];
-
-	KDXX_R[4].d = KD_Q[7] or KD_Q[5] or !KD_Q[1];
-
-	KDXX_R[0].d = KD_Q[5] or !KD_Q[1] or !KD_Q[7];
-
-	KB_ADDR_ROW2 = LCELL((/IO & KB_ROW_LATCH[2]) or (!/IO & KB_MA[1]));
-	KDXX_R[3].d = !KD_Q[5] or KD_Q[1] or KD_Q[7];
-
-	KDX_R[0].d = (KD_Q[0] & KDXX[0]) # (KB_BREAK & !KDXX[0]);
-
-	KDX_R[4].d = (KD_Q[5] & KDXX[4]) # (KB_BREAK & !KDXX[4]);
-
-	KDX_R[3].d = (KD_Q[4] & KDXX[3]) # (KB_BREAK & !KDXX[3]);
-
-	KA[0] = LCELL((!KB_RAM_COMMAND & !KB_RAM_ADDR0_N) or (KB_RAM_COMMAND & KB_DATA[0]) or !KB_SCAN_SELECT);
-	KB_RAM_ADDR1_N_R.d = !KD_Q[3];
-	KB_RAM_ADDR1_N_R.clk = RXA[0];
-	KB_RAM_ADDR1_N_R.clrn = KB_COUNT_N[2];
-	KB_RAM_ADDR1_N_R.prn = VCC;
-	KB_RAM_ADDR1_N_R.ena = VCC;
-	KB_SHIFT_R.d = (KB_SHIFT & !KB_SHIFT_CODE) or (KB_SHIFT_CODE & !KB_BREAK);
-	KB_SHIFT_R.clk = KB_COUNT_N[2];
-	KB_SHIFT_R.clrn = VCC;
-	KB_SHIFT_R.prn = VCC;
-	KB_SHIFT_R.ena = VCC;
-	KA[1] = LCELL((!KB_RAM_COMMAND & !KB_RAM_ADDR1_N) or (KB_RAM_COMMAND & KB_DATA[1]) or !KB_SCAN_SELECT);
-	KB_SHIFT_CODE = LCELL((KB_SHIFT_CLASS) & CASCADE((KB_DATA[6] & KB_DATA[3] & !KB_DATA[1] & KB_DATA[0]) or (!KB_DATA[6] & !KB_DATA[3] & KB_DATA[1] & !KB_DATA[0])));
-	KB_RAM_COMMAND = LCELL(!KB_RAM_ADDR0_N & !KB_RAM_ADDR1_N);
-	KB_RAM_ADDR0_N_R.d = !KD_Q[6];
-	KB_RAM_ADDR0_N_R.clk = RXA[0];
-	KB_RAM_ADDR0_N_R.clrn = KB_COUNT_N[2];
-	KB_RAM_ADDR0_N_R.prn = VCC;
-	KB_RAM_ADDR0_N_R.ena = VCC;
-	KB_ROW_LATCH_R[0].d = KD_Q[0];
-
-	KB_ADDR_ROW0 = LCELL((/IO & KB_ROW_LATCH[0]) or (!/IO & KB_MA[0]));
-	KA[3] = LCELL((KB_RAM_COMMAND & KB_SCAN_SELECT & KB_DATA[3]) or (!KB_SCAN_SELECT & KB_ADDR_ROW2));
-	KA[2] = LCELL((KB_RAM_COMMAND & KB_SCAN_SELECT & KB_DATA[2]) or (KB_ADDR_ROW0 & !KB_SCAN_SELECT));
-	KA[6] = LCELL((!KB_RAM_COMMAND & KB_SCAN_SELECT) or (KB_SCAN_SELECT & KB_DATA[6]));
-	KA[5] = LCELL((KB_RAM_COMMAND & KB_DATA[5]) or !KB_SCAN_SELECT);
-	KA[4] = LCELL((KB_RAM_COMMAND & KB_DATA[4] & KB_SCAN_SELECT) or (KB_ADDR_ROW1 & !KB_SCAN_SELECT));
-	KA[7] = LCELL(!KB_RAM_COMMAND or !KB_SCAN_SELECT or KB_DATA[7]);
-	KB_PRESSED_R[3].d = (!KB_SCAN_VALUE_D & !KD_Q[0]) or KB_PRESSED[3];
-
-	KB_SCAN_VALUE_D_R.d = (KB_SCAN_A9_A11 & !KB_MA[2]) or KB_SCAN_A15 or KB_SCAN_MUX_LO;
-	KB_SCAN_VALUE_D_R.clk = TG42;
-	KB_SCAN_VALUE_D_R.clrn = VCC;
-	KB_SCAN_VALUE_D_R.prn = VCC;
-	KB_SCAN_VALUE_D_R.ena = VCC;
-	KB_SCAN_MUX_LO = LCELL((!KB_MA[1] & KB_SCAN_MUX_LO_LUT_TERM1 & KB_MA[0]) or (!KB_MA[0] & !KB_SCAN_MUX_HI));
-	KB_SCAN_A15 = LCELL(KB_MA[2] & A[15] & KB_MA[0] & KB_MA[1]);
-	KB_MA_R[2].d = (KB_MA[2] & !KB_MA[0]) or (!KB_MA[2] & KB_MA[0] & KB_MA[1]) or (KB_MA[2] & !KB_MA[1]);
-
-	KB_SCAN_MUX_HI = LCELL(((!A[10] & !KB_MA[2]) or (!A[14] & KB_MA[2]) or !KB_MA[1]) & CASCADE(!A[12] or !KB_MA[2] or KB_MA[1]));
-	KB_MA_R[1].d = (!KB_MA[1] & KB_MA[0]) or (KB_MA[1] & !KB_MA[0]);
-
-	KB_SCAN_A9_A11 = LCELL((KB_MA[1] & A[11] & KB_MA[0]) or (!KB_MA[1] & A[8] & !KB_MA[0]));
-	KB_PRESSED_R[5].d = (!KB_SCAN_VALUE_D & !KD_Q[2]) or KB_PRESSED[5];
-
-	KB_PRESSED_R[4].d = (!KB_SCAN_VALUE_D & !KD_Q[4]) or KB_PRESSED[4];
-
-	KB_PRESSED_R[2].d = (!KB_SCAN_VALUE_D & !KD_Q[5]) or KB_PRESSED[2];
-
-	KB_PRESSED_R[0].d = (!KB_SCAN_VALUE_D & !KD_Q[7]) or KB_PRESSED[0];
-
-	KB_PRESSED_R[1].d = (!KB_SCAN_VALUE_D & !KD_Q[1]) or KB_PRESSED[1];
-
-	KB_CODE_TERM1 = !KB_DATA[0] & !KB_DATA[1];
-	KB_CODE_TERM2 = KB_CODE_TERM1;
-	KB_CODE_TERM3 = !KB_DATA[3] & !KB_DATA[2] & KB_CODE_TERM2;
-	KB_CODE_TERM4 = KB_DATA[4] & KB_DATA[5] & KB_CODE_TERM3;
-	KB_CODE_TERM5 = KB_DATA[6] & KB_DATA[7] & KB_CODE_TERM4;
-	KD.data[] = (KDX[5], VCC, KDX[4], KDX[3], VCC, KDX[2], KDX[1], KDX[0]);
-	KD.address[] = (KA[7], KA[6], KA[5], KA[4], KA[3], KA[2], KA[1], KA[0]);
-	KD.we = WR_KBD;
-	KD.inclock = TG42;
-	KD_Q[0] = KD.q[0];
-	KD_Q[1] = KD.q[1];
-	KD_Q[2] = KD.q[2];
-	KD_Q[3] = KD.q[3];
-	KD_Q[4] = KD.q[4];
-	KD_Q[5] = KD.q[5];
-	KD_Q[6] = KD.q[6];
-	KD_Q[7] = KD.q[7];
-
-	-- Combinational Q aliases: no extra FF, LCELL or delay.
-	KB_ALT = KB_ALT_R.q;
-	KB_BITCOUNT_CLRN = KB_BITCOUNT_CLRN_R.q;
-	KB_BREAK = KB_BREAK_R.q;
-	KB_COUNT0_D = KB_COUNT0_D_R.q;
-	KB_COUNT1_D = KB_COUNT1_D_R.q;
-	KB_COUNT2_D = KB_COUNT2_D_R.q;
-	KB_COUNT_N[] = KB_COUNT_N_R[].q;
-	KB_CTRL = KB_CTRL_R.q;
-	KB_DATA[] = KB_DATA_R[].q;
-	KB_EXT = KB_EXT_R.q;
-	KB_F12_N = KB_F12_N_R.q;
-	KB_IRQ_N = KB_IRQ_N_R.q;
-	KB_MA[] = KB_MA_R[].q;
-	KB_PRESSED[] = KB_PRESSED_R[].q;
-	KB_RAM_ADDR0_N = KB_RAM_ADDR0_N_R.q;
-	KB_RAM_ADDR1_N = KB_RAM_ADDR1_N_R.q;
-	KB_RESET_REQUEST = KB_RESET_REQUEST_R.q;
-	KB_ROW_LATCH[] = KB_ROW_LATCH_R[].q;
-	KB_SCAN_CLRN = KB_SCAN_CLRN_R.q;
-	KB_SCAN_VALUE_D = KB_SCAN_VALUE_D_R.q;
-	KB_SHIFT = KB_SHIFT_R.q;
-	KB_SHIFT_CLK = KB_SHIFT_CLK_R.q;
-	KDX[] = KDX_R[].q;
-	KDXX[] = KDXX_R[].q;
-	K_CLK = K_CLK_R.q;
-	RXA[] = RXA_R[].q;
-	RXA_CLEAR_D = RXA_CLEAR_D_R.q;
 END;
+

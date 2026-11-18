@@ -1,851 +1,305 @@
--- Early AY engine: data/address ports, register microcode RAM and tone/noise/envelope state. RAM contents are taken from this ACX reverse.
--- Named control/data banks and preserved physical helpers; independent source review pending.
-INCLUDE "lpm_ram_dp";
-INCLUDE "lpm_ram_dq";
+
+	TITLE "AY-3-8910";
+
+include "lpm_ram_dq";
+
 SUBDESIGN ay
-(
-	/WR : INPUT;
-	D[7..0] : INPUT;
-	/RESET : INPUT;
-	TG42 : INPUT;
-	CT[5..0] : INPUT;
-	CTH[5..0] : INPUT;
-	DCPP[7..0] : INPUT;
-	IO_WINDOW : INPUT;
-	PORT_XXX10000 : INPUT;
-	PORT_XXX10001 : INPUT;
-	PORT_C2_CA_DATA[4..0] : INPUT;
-	AY_AX[7..0] : OUTPUT;
-	AY_DQX[3..0] : OUTPUT;
-	AY_TONE23_SLOT : OUTPUT;
-	AY_TONE12_SLOT : OUTPUT;
-	AY_SAMPLE_END : OUTPUT;
-	AY_SAMPLE_START : OUTPUT;
-	AY_PHASE2_FALL : OUTPUT;
-	AY_DD[7..0] : OUTPUT;
+	(
+	/RESET			: INPUT;
+	CLK42			: INPUT;	-- такты 42
+	AY_T[8..0]		: INPUT;	-- внешний счетчик тактов (CTH2..0,CT5..0)
+
+	AY_D_WR			: INPUT;
+	AY_A_WR			: INPUT;
+
+	D[7..0]			: INPUT;
+	AYDQ[7..0]		: OUTPUT;	-- rev: esb3.q (ec*_c) -> DCP read-path
+	AY_READ_CAPTURE_EN			: OUTPUT;	-- rev lc_AY_READ_CAPTURE_EN = !C23_1 & !C8_2: ena esb3-сэмплеров (общий с DCP, дедуп)
+
+	AY_CH_A[3..0]	: OUTPUT;
+	AY_CH_B[3..0]	: OUTPUT;
+	AY_CH_C[3..0]	: OUTPUT;
+
+	AY_CH_L[9..0]	: OUTPUT;
+	AY_CH_R[9..0]	: OUTPUT;
+
+	AY_CH_VAL		: OUTPUT;	-- chanels data valid
+	BEEPER			: INPUT;
+
+	BIT_CLOCK_DELAY : OUTPUT;
 )
+
 VARIABLE
-	ROM : lpm_ram_dq WITH (lpm_width=8,lpm_widthad=8,lpm_file="AY.MIF");
-	AY_CODE[7..0] : NODE;
-	BD[7..0] : NODE;
-	AY_ADR[3..0] : NODE;
-	AY_DAT[7..0] : NODE;
-	AY_DI[7..0] : NODE;
-	AY_AX[7..0] : NODE;
-	AY_MIXER[5..0] : NODE;
-	AY_GF[3..0] : NODE;
-	AY_VA[3..0] : NODE;
-	AY_AA[3..0] : NODE;
-	AY_AMP[3..0] : NODE;
-	AY_DQX[3..0] : NODE;
-	AY_SH_N[16..0] : NODE;
-	AY_ENVELOPE_CODE : NODE;
-	AY_TONE_CODE_LO : NODE;
-	AY_MIXER_CODE_LO : NODE;
-	AY_TONE3_CODE_LO : NODE;
-	AY_TONE_WR : NODE;
-	AY_MIXER_WR : NODE;
-	AY_TONE3_WR : NODE;
-	AY_OUT1 : NODE;
-	AY_CH12_MUX : NODE;
-	AY_CH2_GATE : NODE;
-	AY_CH1_GATE : NODE;
-	AY_BEEPER_SAMPLE : NODE;
-	AY_FORM_CODE_LO : NODE;
-	AY_NOISE_CODE_LO : NODE;
-	AY_TONE2_CODE_LO : NODE;
-	AY_NOISE_WR : NODE;
-	AY_TONE2_WR : NODE;
-	AY_TONE1_WR : NODE;
-	AY_TONE1_CODE_LO : NODE;
-	AY_FORM_WR : NODE;
-	AY_CH_MIX : NODE;
-	AY_OUT3 : NODE;
-	AY_CH3_GATE : NODE;
-	AY_TONE3_WR_D : NODE;
-	AY_OUT2 : NODE;
-	AY_TONE3_SLOT_1 : NODE;
-	AY_TONE23_SLOT : NODE;
-	AY_NOISE_TONE2_SLOT : NODE;
-	AY_TONE1_WR_D : NODE;
-	AY_TONE12_SLOT : NODE;
-	AY_TONE1_SLOT : NODE;
-	AY_SAMPLE_END : NODE;
-	AY_F_RES : NODE;
-	AY_F_RES_D : NODE;
-	AY_SAMPLE_START_LO : NODE;
-	AY_CCC7_N : NODE;
-	AY_SAMPLE_END_LO : NODE;
-	AY_SAMPLE_START : NODE;
-	AY_AX3_N : NODE;
-	AY_BD_HIGH_CLRN : NODE;
-	AY_BD4_CLRN : NODE;
-	AY_CCC3 : NODE;
-	AY_AX2_N : NODE;
-	AY_AAX0 : NODE;
-	AY_PHASE2_FALL : NODE;
-	AY_AX0_N : NODE;
-	AY_CCC2 : NODE;
-	AY_CCC6 : NODE;
-	AY_AX1_N : NODE;
-	AY_CCC4 : NODE;
-	AY_CCC1 : NODE;
-	AY_CODE5_N_D : NODE;
-	AY_BORROW1 : NODE;
-	AY_CODE7_D : NODE;
-	AY_SUB_ONE : NODE;
-	AY_BORROW3_N : NODE;
-	AY_DATA_LO_ZERO : NODE;
-	AY_BINV : NODE;
-	AY_BBLK : NODE;
-	AY_CCC0 : NODE;
-	AY_CX_ENA : NODE;
-	AY_MEM_WRITE_N : NODE;
-	AY_CX_CLEAR : NODE;
-	AY_DAT_WR : NODE;
-	AY_DAT_WR_D : NODE;
-	AY_NOISE_ENA : NODE;
-	AY_DAT_ENA : NODE;
-	AY_TYPE010 : NODE;
-	AY_VAR : NODE;
-	AY_ABLK : NODE;
-	AY_VX : NODE;
-	AY_ENVELOPE_WR : NODE;
-	AY_C : NODE;
-	AY_BORROW4 : NODE;
-	AY_CXX_N : NODE;
-	AY_CX_N : NODE;
-	AY_DATA_ZERO0 : NODE;
-	AY_CX_HOLD : NODE;
-	AY_CX_RELOAD : NODE;
-	AY_CODE0_D : NODE;
-	AY_DATA_ZERO1 : NODE;
-	AY_CXX_HOLD : NODE;
-	AY_ADDR_PORT : NODE;
-	AY_DATA_PORT : NODE;
-	AY_A_WR : NODE;
-	AY_WR : NODE;
-	AY_D_WR : NODE;
-	BWR : NODE;
-	AY_F_R1 : NODE;
-	AY_CCC5 : NODE;
-	AY_ENV_CARRY1 : CARRY;
-	AY_ENV_CARRY2 : CARRY;
-	AY_ENV_CARRY3 : CARRY;
-	AY_ENV_CARRY4 : CARRY;
-	AY_ENV_CARRY5 : CARRY;
-	AY_SUB_BORROW1 : CARRY;
-	AY_SUB_BORROW2 : CARRY;
-	AY_SUB_BORROW3 : CARRY;
-	AY_SUB_BORROW4 : CARRY;
-	AY_DD[7..0] : NODE;
-	-- Explicit instances preserve FF source names across module ports.
-	AY_AA_R[3..0] : DFFE;
-	AY_AAX0_R : DFFE;
-	AY_ABLK_R : DFFE;
-	AY_ADDR_PORT_R : DFFE;
-	AY_ADR_R[3..0] : DFFE;
-	AY_AMP_R[3..0] : DFFE;
-	AY_A_WR_R : DFFE;
-	AY_BBLK_R : DFFE;
-	AY_BEEPER_SAMPLE_R : DFFE;
-	AY_BINV_R : DFFE;
-	AY_C_R : DFFE;
-	AY_CCC0_R : DFFE;
-	AY_CCC1_R : DFFE;
-	AY_CCC2_R : DFFE;
-	AY_CCC3_R : DFFE;
-	AY_CCC4_R : DFFE;
-	AY_CCC5_R : DFFE;
-	AY_CCC6_R : DFFE;
-	AY_CCC7_N_R : DFFE;
-	AY_CH_MIX_R : DFFE;
-	AY_CODE0_D_R : DFFE;
-	AY_CODE5_N_D_R : DFFE;
-	AY_CODE7_D_R : DFFE;
-	AY_CXX_N_R : DFFE;
-	AY_CX_CLEAR_R : DFFE;
-	AY_CX_ENA_R : DFFE;
-	AY_CX_N_R : DFFE;
-	AY_CX_RELOAD_R : DFFE;
-	AY_DAT_R[7..0] : DFFE;
-	AY_DATA_PORT_R : DFFE;
-	AY_DAT_WR_R : DFFE;
-	AY_DAT_WR_D_R : DFFE;
-	AY_DD_R[7..0] : DFFE;
-	AY_DQX_R[3..0] : DFFE;
-	AY_D_WR_R : DFFE;
-	AY_ENVELOPE_WR_R : DFFE;
-	AY_FORM_WR_R : DFFE;
-	AY_F_R1_R : DFFE;
-	AY_F_RES_R : DFFE;
-	AY_F_RES_D_R : DFFE;
-	AY_GF_R[3..0] : DFFE;
-	AY_MIXER_R[5..0] : DFFE;
-	AY_MIXER_WR_R : DFFE;
-	AY_NOISE_TONE2_SLOT_R : DFFE;
-	AY_NOISE_WR_R : DFFE;
-	AY_OUT1_R : DFFE;
-	AY_OUT2_R : DFFE;
-	AY_OUT3_R : DFFE;
-	AY_SAMPLE_END_R : DFFE;
-	AY_SAMPLE_START_R : DFFE;
-	AY_SH_N_R[16..0] : DFFE;
-	AY_SUB_ONE_R : DFFE;
-	AY_TONE12_SLOT_R : DFFE;
-	AY_TONE1_SLOT_R : DFFE;
-	AY_TONE1_WR_R : DFFE;
-	AY_TONE1_WR_D_R : DFFE;
-	AY_TONE23_SLOT_R : DFFE;
-	AY_TONE2_WR_R : DFFE;
-	AY_TONE3_SLOT_1_R : DFFE;
-	AY_TONE3_WR_R : DFFE;
-	AY_TONE3_WR_D_R : DFFE;
-	AY_TONE_WR_R : DFFE;
-	AY_TYPE010_R : DFFE;
-	AY_VA_R[3..0] : DFFE;
-	AY_VAR_R : DFFE;
-	AY_VX_R : DFFE;
-	BD_R[7..0] : DFFE;
-	BWR_R : DFFE;
+    AY_CCC[7..0] : DFF;
+
+    AY_ADR[3..0] : DFF;
+
+    AY_SHAPE_ADR_R : DFF;
+
+    BD[7..0] : DFFE;
+
+    BWR : DFFE;
+
+    SHAPE_RESTART_N : DFF;
+
+    ENV_RESET_PIPE[1..0] : DFF;
+
+    AY_DAT[7..0] : DFFE;
+
+    AY_C : DFFE;
+
+    BORROW_BASE_R, PERIOD_HIGH_R, BORROW_IN_R : DFF;
+
+    DAT_WRITE_R, DAT_WRITE_DELAY_R : DFF;
+
+    AY_DAT_EN, AY_DAT_ZERO, AY_DAT_ZERO_TONE, AY_DAT_ZERO_NOISE : NODE;
+
+    AY_CPU_MASK4_N, AY_CPU_MASK7_N : NODE;
+
+    AY_RAM_Q[7..0], AY_DO[7..0], AY_DI[7..0], AY_AX[7..0] : NODE;
+
+    RAM_DATA_BUFFER[7..0] : NODE;
+
+    RAM_ADDR_CPU_SCAN[3..0], RAM_ADDR_LOW[3..0] : NODE;
+
+    RAM_SCAN, RAM_OP_WRITE_N, AY_WR : NODE;
+
+    SLOT_CH[3..1], SLOT_NOISE, SLOT_ENV, SLOT_MIXER,
+    SLOT_SHAPE, SLOT_AMP : DFF;
+
+    SLOT_RESET, SLOT_COUNT, SLOT_PERIOD : DFF;
+
+    DECODE_CH[3..1], DECODE_NOISE, DECODE_ENV, DECODE_MIXER,
+    DECODE_SHAPE, DECODE_AMP : NODE;
+
+    OP_AUDIO, OP_ENV_TYPE : NODE;
+
+    PERIOD_RESET_R, PERIOD_LOW_R : DFF;
+
+    AY_CX, AY_CXX : DFFE;
+
+    PERIOD_TONE_NEXT, PERIOD_NOISE_NEXT : NODE;
+
+    TONE[3..1] : DFFE;
+
+    AY_X_[5..0] : DFFE;
+
+    MIX_GATE[3..1], MIX_SELECT_A, NOISE_TICK : NODE;
+
+    AY_CH_MIX : DFF;
+
+    AY_SH[16..0] : DFFE;
+
+    AY_ENV[5..0] : DFFE;
+
+    AY_GF[3..0] : DFFE;
+
+    ENV_STOP_R, ENV_ZERO_R, ENV_INVERT_R : DFF;
+
+    AY_AA[3..0], AY_AMP[3..0] : DFF;
+
+    AY_DQX[3..0] : DFFE;
+
+    BEEPER_R : DFF;
+
+    SAMPLE_VALID_R, SUM_CLEAR_R : DFF;
+
+    SAMPLE_PHASE, CLEAR_PHASE : NODE;
+
+    CH3_DELAY_R, CH3_WIDE_R, CH1_DELAY_R, CH1_WIDE_R : DFF;
+
+    CENTER_WIDE_R, SUM_L_STAGE_R, SUM_R_STAGE_R, SUM_L_EN_R,
+    SUM_R_EN_R : DFF;
+
+    AY_CH_CS[8..0] : DFF;
+
+    AY_CH_LX[10..0], AY_CH_RX[10..0] : DFFE;
 
 BEGIN
-
-	BD_R[].d = D[7..0];
-
-	BD_R[].prn = VCC;
-
-	BD_R[].ena = AY_CCC1;
-
-	BD_R[].clk = TG42;
-
-	AY_VA_R[].prn = VCC;
-
-	AY_VA_R[].clrn = AY_F_RES;
-
-	AY_VA_R[].ena = AY_ENVELOPE_WR;
-
-	AY_VA_R[].clk = TG42;
-
-	AY_SH_N_R[].prn = VCC;
-
-	AY_SH_N_R[].clrn = /RESET;
-
-	AY_SH_N_R[].ena = AY_NOISE_ENA;
-
-	AY_SH_N_R[].clk = TG42;
-
-	AY_MIXER_R[].d = AY_DAT[5..0];
-
-	AY_MIXER_R[].prn = VCC;
-
-	AY_MIXER_R[].clrn = VCC;
-
-	AY_MIXER_R[].ena = AY_MIXER_WR;
-
-	AY_MIXER_R[].clk = TG42;
-
-	AY_GF_R[].d = AY_DAT[3..0];
-
-	AY_GF_R[].prn = VCC;
-
-	AY_GF_R[].clrn = VCC;
-
-	AY_GF_R[].ena = AY_FORM_WR;
-
-	AY_GF_R[].clk = TG42;
-
-	AY_DQX_R[].clrn = !AY_NOISE_WR;
-
-	AY_DQX_R[].ena = AY_TONE_WR;
-
-	AY_DQX_R[].clk = TG42;
-
-	AY_DD_R[].d = AY_CODE[7..0];
-
-	AY_DD_R[].prn = VCC;
-
-	AY_DD_R[].clrn = VCC;
-
-	AY_DD_R[].ena = AY_AX[7];
-
-	AY_DD_R[].clk = TG42;
-
-	AY_DAT_R[].prn = VCC;
-
-	AY_DAT_R[].clrn = VCC;
-
-	AY_DAT_R[].ena = AY_DAT_ENA;
-
-	AY_DAT_R[].clk = TG42;
-
-	AY_AMP_R[].prn = VCC;
-
-	AY_AMP_R[].clrn = VCC;
-
-	AY_AMP_R[].ena = VCC;
-
-	AY_AMP_R[].clk = TG42;
-
-	AY_ADR_R[].d = D[3..0];
-
-	AY_ADR_R[].prn = VCC;
-
-	AY_ADR_R[].clrn = VCC;
-
-	AY_ADR_R[].ena = VCC;
-
-	AY_ADR_R[].clk = AY_A_WR;
-
-	AY_AA_R[].prn = VCC;
-
-	AY_AA_R[].clrn = VCC;
-
-	AY_AA_R[].ena = VCC;
-
-	AY_AA_R[].clk = TG42;
-	AY_ENVELOPE_CODE = LCELL((!AY_CODE[7] & AY_CODE[6]) & CASCADE(AY_CODE[5] & AY_CODE[2] & AY_CODE[0] & !AY_CODE[1]));
-	AY_TONE_CODE_LO = LCELL((AY_CCC1 & !AY_CODE[7] & AY_CODE[1]) or (AY_CCC1 & !AY_CODE[7] & AY_CODE[0]));
-	AY_MIXER_CODE_LO = LCELL(AY_CODE[5] & AY_CODE[2] & !AY_CODE[0] & AY_CODE[1]);
-	AY_TONE3_CODE_LO = LCELL(AY_CODE[5] & !AY_CODE[2] & AY_CODE[0] & AY_CODE[1]);
-	AY_TONE_WR_R.d = AY_TONE_CODE_LO & AY_CODE[6] & !AY_CODE[2] & AY_CODE[5];
-	AY_TONE_WR_R.clk = TG42;
-	AY_TONE_WR_R.clrn = VCC;
-	AY_TONE_WR_R.prn = VCC;
-	AY_TONE_WR_R.ena = VCC;
-	AY_MIXER_WR_R.d = AY_MIXER_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_MIXER_WR_R.clk = TG42;
-	AY_MIXER_WR_R.clrn = VCC;
-	AY_MIXER_WR_R.prn = VCC;
-	AY_MIXER_WR_R.ena = VCC;
-	AY_TONE3_WR_R.d = AY_TONE3_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_TONE3_WR_R.clk = TG42;
-	AY_TONE3_WR_R.clrn = VCC;
-	AY_TONE3_WR_R.prn = VCC;
-	AY_TONE3_WR_R.ena = VCC;
-	AY_OUT1_R.d = (!AY_OUT1 & !AY_CX_N) or (AY_OUT1 & AY_CX_N);
-	AY_OUT1_R.clk = TG42;
-	AY_OUT1_R.clrn = VCC;
-	AY_OUT1_R.prn = VCC;
-	AY_OUT1_R.ena = AY_TONE1_WR;
-
-	AY_CH12_MUX = LCELL((AY_CH1_GATE & !AY_CODE[1]) or (AY_CH2_GATE & !AY_CODE[0] & AY_CODE[1]));
-	AY_CH2_GATE = LCELL((!AY_SH_N[0] & AY_MIXER[1]) or (!AY_SH_N[0] & AY_OUT2) or (AY_MIXER[4] & AY_MIXER[1]) or (AY_MIXER[4] & AY_OUT2));
-
-	AY_CH1_GATE = LCELL((!AY_SH_N[0] & AY_MIXER[0]) or (!AY_SH_N[0] & AY_OUT1) or (AY_MIXER[3] & AY_MIXER[0]) or (AY_MIXER[3] & AY_OUT1));
-	AY_DQX_R[2].d = AY_CH_MIX & AY_AMP[2];
-
-	AY_DQX_R[2].prn = !AY_BEEPER_SAMPLE;
-
-	AY_AMP_R[1].d = (AY_AA[1] & AY_DAT[4]) # (AY_DAT[1] & !AY_DAT[4]);
-
-	AY_DQX_R[0].d = AY_AMP[0] & AY_CH_MIX;
-
-	AY_DQX_R[0].prn = !AY_BEEPER_SAMPLE;
-
-	AY_BEEPER_SAMPLE_R.d = AY_NOISE_WR & PORT_C2_CA_DATA[4];
-	AY_BEEPER_SAMPLE_R.clk = TG42;
-	AY_BEEPER_SAMPLE_R.clrn = VCC;
-	AY_BEEPER_SAMPLE_R.prn = VCC;
-	AY_BEEPER_SAMPLE_R.ena = VCC;
-	AY_DQX_R[1].d = AY_AMP[1] & AY_CH_MIX;
-
-	AY_DQX_R[1].prn = VCC;
-
-	AY_AMP_R[0].d = (AY_AA[0] & AY_DAT[4]) # (AY_DAT[0] & !AY_DAT[4]);
-
-	AY_AMP_R[3].d = (AY_AA[3] & AY_DAT[4]) # (AY_DAT[3] & !AY_DAT[4]);
-
-	AY_DQX_R[3].d = AY_AMP[3] & AY_CH_MIX;
-
-	AY_DQX_R[3].prn = !AY_BEEPER_SAMPLE;
-
-	BD_R[1].clrn = VCC;
-
-	AY_DI[2] = LCELL((BD[2] & !AY_CCC1 & AY_CCC0) or (AY_DAT[2] & !AY_CCC0) or (AY_DAT[2] & AY_CCC1));
-
-	BD_R[2].clrn = VCC;
-
-	AY_DI[1] = LCELL((BD[1] & !AY_CCC1 & AY_CCC0) or (AY_DAT[1] & !AY_CCC0) or (AY_DAT[1] & AY_CCC1));
-
-	BD_R[3].clrn = VCC;
-
-	AY_DI[3] = LCELL((BD[3] & !AY_CCC1 & AY_CCC0) or (AY_DAT[3] & !AY_CCC0) or (AY_DAT[3] & AY_CCC1));
-	AY_FORM_CODE_LO = LCELL(AY_CODE[5] & AY_CODE[2] & AY_CODE[0] & AY_CODE[1]);
-	AY_NOISE_CODE_LO = LCELL(AY_CODE[5] & AY_CODE[2] & !AY_CODE[0] & !AY_CODE[1]);
-	AY_TONE2_CODE_LO = LCELL(AY_CODE[5] & !AY_CODE[2] & !AY_CODE[0] & AY_CODE[1]);
-	AY_NOISE_WR_R.d = AY_NOISE_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_NOISE_WR_R.clk = TG42;
-	AY_NOISE_WR_R.clrn = VCC;
-	AY_NOISE_WR_R.prn = VCC;
-	AY_NOISE_WR_R.ena = VCC;
-	AY_TONE2_WR_R.d = AY_TONE2_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_TONE2_WR_R.clk = TG42;
-	AY_TONE2_WR_R.clrn = VCC;
-	AY_TONE2_WR_R.prn = VCC;
-	AY_TONE2_WR_R.ena = VCC;
-	AY_TONE1_WR_R.d = AY_TONE1_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_TONE1_WR_R.clk = TG42;
-	AY_TONE1_WR_R.clrn = VCC;
-	AY_TONE1_WR_R.prn = VCC;
-	AY_TONE1_WR_R.ena = VCC;
-	AY_TONE1_CODE_LO = LCELL(AY_CODE[5] & !AY_CODE[2] & AY_CODE[0] & !AY_CODE[1]);
-	AY_FORM_WR_R.d = AY_FORM_CODE_LO & AY_CCC1 & !AY_CODE[7] & AY_CODE[6];
-	AY_FORM_WR_R.clk = TG42;
-	AY_FORM_WR_R.clrn = VCC;
-	AY_FORM_WR_R.prn = VCC;
-	AY_FORM_WR_R.ena = VCC;
-	AY_CH_MIX_R.d = (AY_CH3_GATE & AY_CODE[0] & AY_CODE[1]) or AY_CH12_MUX;
-	AY_CH_MIX_R.clk = TG42;
-	AY_CH_MIX_R.clrn = VCC;
-	AY_CH_MIX_R.prn = VCC;
-	AY_CH_MIX_R.ena = VCC;
-	AY_OUT3_R.d = (!AY_OUT3 & !AY_CX_N) or (AY_OUT3 & AY_CX_N);
-	AY_OUT3_R.clk = TG42;
-	AY_OUT3_R.clrn = VCC;
-	AY_OUT3_R.prn = VCC;
-	AY_OUT3_R.ena = AY_TONE3_WR;
-
-	AY_CH3_GATE = LCELL((AY_MIXER[5] & AY_MIXER[2]) or (AY_MIXER[5] & AY_OUT3) or (AY_MIXER[2] & !AY_SH_N[0]) or (!AY_SH_N[0] & AY_OUT3));
-	AY_TONE3_WR_D_R.d = AY_TONE3_WR;
-	AY_TONE3_WR_D_R.clk = TG42;
-	AY_TONE3_WR_D_R.clrn = VCC;
-	AY_TONE3_WR_D_R.prn = VCC;
-	AY_TONE3_WR_D_R.ena = VCC;
-	AY_OUT2_R.d = (!AY_OUT2 & !AY_CX_N) or (AY_OUT2 & AY_CX_N);
-	AY_OUT2_R.clk = TG42;
-	AY_OUT2_R.clrn = VCC;
-	AY_OUT2_R.prn = VCC;
-	AY_OUT2_R.ena = AY_TONE2_WR;
-	AY_TONE3_SLOT_1_R.d = AY_TONE3_WR or AY_TONE3_WR_D;
-	AY_TONE3_SLOT_1_R.clk = TG42;
-	AY_TONE3_SLOT_1_R.clrn = VCC;
-	AY_TONE3_SLOT_1_R.prn = VCC;
-	AY_TONE3_SLOT_1_R.ena = VCC;
-	AY_TONE23_SLOT_R.d = AY_NOISE_TONE2_SLOT or AY_TONE3_SLOT_1 or AY_TONE3_WR or AY_TONE2_WR;
-	AY_TONE23_SLOT_R.clk = TG42;
-	AY_TONE23_SLOT_R.clrn = VCC;
-	AY_TONE23_SLOT_R.prn = VCC;
-	AY_TONE23_SLOT_R.ena = VCC;
-	AY_NOISE_TONE2_SLOT_R.d = AY_NOISE_WR or AY_TONE2_WR;
-	AY_NOISE_TONE2_SLOT_R.clk = TG42;
-	AY_NOISE_TONE2_SLOT_R.clrn = VCC;
-	AY_NOISE_TONE2_SLOT_R.prn = VCC;
-	AY_NOISE_TONE2_SLOT_R.ena = VCC;
-	AY_TONE1_WR_D_R.d = AY_TONE1_WR;
-	AY_TONE1_WR_D_R.clk = TG42;
-	AY_TONE1_WR_D_R.clrn = VCC;
-	AY_TONE1_WR_D_R.prn = VCC;
-	AY_TONE1_WR_D_R.ena = VCC;
-	AY_TONE12_SLOT_R.d = AY_TONE1_SLOT or AY_NOISE_TONE2_SLOT or AY_TONE2_WR or AY_TONE1_WR;
-	AY_TONE12_SLOT_R.clk = TG42;
-	AY_TONE12_SLOT_R.clrn = VCC;
-	AY_TONE12_SLOT_R.prn = VCC;
-	AY_TONE12_SLOT_R.ena = VCC;
-	AY_TONE1_SLOT_R.d = AY_TONE1_WR or AY_TONE1_WR_D;
-	AY_TONE1_SLOT_R.clk = TG42;
-	AY_TONE1_SLOT_R.clrn = VCC;
-	AY_TONE1_SLOT_R.prn = VCC;
-	AY_TONE1_SLOT_R.ena = VCC;
-	AY_AX[5] = LCELL(AY_CCC7_N & !AY_CCC1 & !AY_CCC0);
-	AY_SAMPLE_END_R.d = AY_SAMPLE_END_LO & AY_CCC7_N & AY_CCC5 & AY_CCC6;
-	AY_SAMPLE_END_R.clk = TG42;
-	AY_SAMPLE_END_R.clrn = VCC;
-	AY_SAMPLE_END_R.prn = VCC;
-	AY_SAMPLE_END_R.ena = VCC;
-	AY_F_RES_R.d = AY_F_RES_D;
-	AY_F_RES_R.clk = AY_CCC7_N;
-	AY_F_RES_R.clrn = AY_F_R1;
-	AY_F_RES_R.prn = VCC;
-	AY_F_RES_R.ena = VCC;
-	AY_F_RES_D_R.d = VCC;
-	AY_F_RES_D_R.clk = AY_CCC7_N;
-	AY_F_RES_D_R.clrn = AY_F_R1;
-	AY_F_RES_D_R.prn = VCC;
-	AY_F_RES_D_R.ena = VCC;
-	AY_SAMPLE_START_LO = LCELL(!AY_CCC3 & !AY_CCC2 & !AY_CCC4);
-	AY_CCC7_N_R.d = !CTH[1];
-	AY_CCC7_N_R.clk = TG42;
-	AY_CCC7_N_R.clrn = VCC;
-	AY_CCC7_N_R.prn = VCC;
-	AY_CCC7_N_R.ena = VCC;
-	AY_SAMPLE_END_LO = LCELL(AY_CCC3 & !AY_CCC2 & !AY_CCC4);
-	AY_SAMPLE_START_R.d = AY_SAMPLE_START_LO & !AY_CCC7_N & !AY_CCC5 & !AY_CCC6;
-	AY_SAMPLE_START_R.clk = TG42;
-	AY_SAMPLE_START_R.clrn = VCC;
-	AY_SAMPLE_START_R.prn = VCC;
-	AY_SAMPLE_START_R.ena = VCC;
-	AY_DI[4] = LCELL((BD[4] & !AY_CCC1 & AY_CCC0) or (AY_DAT[4] & !AY_CCC0) or (AY_DAT[4] & AY_CCC1));
-
-	AY_AX3_N = LCELL((!AY_CODE[3] or !AY_CCC1) & CASCADE((!AY_ADR[3] & AY_CCC0) or (!AY_CCC5 & !AY_CCC0) or AY_CCC1));
-	AY_BD_HIGH_CLRN = LCELL(AY_ADR[3] or (AY_ADR[2] & AY_ADR[0] & AY_ADR[1]) or (!AY_ADR[2] & !AY_ADR[0]) or (!AY_ADR[0] & !AY_ADR[1]));
-	AY_AX[3] = LCELL(!AY_AX3_N);
-	AY_BD4_CLRN = LCELL(AY_ADR[3] or (AY_ADR[2] & AY_ADR[1]) or !AY_ADR[0]);
-
-	BD_R[4].clrn = AY_BD4_CLRN;
-
-	AY_CCC3_R.d = CT[3];
-	AY_CCC3_R.clk = TG42;
-	AY_CCC3_R.clrn = VCC;
-	AY_CCC3_R.prn = VCC;
-	AY_CCC3_R.ena = VCC;
-	AY_AX[2] = LCELL(!AY_AX2_N);
-	AY_AX2_N = LCELL((!AY_CODE[2] or !AY_CCC1) & CASCADE((!AY_ADR[2] & AY_CCC0) or (!AY_CCC3 & !AY_CCC0) or AY_CCC1));
-
-	AY_AAX0_R.d = D[0] & D[2] & D[3] & !D[1];
-	AY_AAX0_R.clk = AY_A_WR;
-	AY_AAX0_R.clrn = VCC;
-	AY_AAX0_R.prn = VCC;
-	AY_AAX0_R.ena = VCC;
-	AY_PHASE2_FALL = LCELL(AY_CCC2 & !CT[2]);
-	AY_AX[4] = LCELL((AY_CCC6 & !AY_CCC0 & !AY_CCC1) or (AY_CODE[4] & AY_CCC1));
-	AY_AX[0] = LCELL(!AY_AX0_N);
-	AY_AX0_N = LCELL((!AY_CODE[0] or !AY_CCC1) & CASCADE((!AY_ADR[0] & AY_CCC0) or (!AY_CCC2 & !AY_CCC0) or AY_CCC1));
-	AY_CCC2_R.d = CT[2];
-	AY_CCC2_R.clk = TG42;
-	AY_CCC2_R.clrn = VCC;
-	AY_CCC2_R.prn = VCC;
-	AY_CCC2_R.ena = VCC;
-	AY_CCC6_R.d = CTH[0];
-	AY_CCC6_R.clk = TG42;
-	AY_CCC6_R.clrn = VCC;
-	AY_CCC6_R.prn = VCC;
-	AY_CCC6_R.ena = VCC;
-	AY_AX[1] = LCELL(!AY_AX1_N);
-	AY_AX1_N = LCELL((!AY_CODE[1] or !AY_CCC1) & CASCADE((!AY_ADR[1] & AY_CCC0) or (!AY_CCC4 & !AY_CCC0) or AY_CCC1));
-	AY_CCC4_R.d = CT[4];
-	AY_CCC4_R.clk = TG42;
-	AY_CCC4_R.clrn = VCC;
-	AY_CCC4_R.prn = VCC;
-	AY_CCC4_R.ena = VCC;
-	AY_CCC1_R.d = CT[1];
-	AY_CCC1_R.clk = TG42;
-	AY_CCC1_R.clrn = VCC;
-	AY_CCC1_R.prn = VCC;
-	AY_CCC1_R.ena = VCC;
-	AY_CODE5_N_D_R.d = !AY_CODE[5];
-	AY_CODE5_N_D_R.clk = TG42;
-	AY_CODE5_N_D_R.clrn = VCC;
-	AY_CODE5_N_D_R.prn = VCC;
-	AY_CODE5_N_D_R.ena = VCC;
-	AY_DAT_R[3].d = (!AY_BORROW3_N & !AY_CODE[3]) or (AY_BORROW3_N & AY_CODE[3]);
-
-	AY_BORROW1 = LCELL(!AY_CODE[0] & AY_SUB_ONE);
-	AY_DAT_R[1].d = (!AY_SUB_ONE & AY_CODE[1]) or (AY_SUB_ONE & !AY_CODE[0] & !AY_CODE[1]) or (AY_CODE[0] & AY_CODE[1]);
-
-	AY_CODE7_D_R.d = AY_CODE[7];
-	AY_CODE7_D_R.clk = TG42;
-	AY_CODE7_D_R.clrn = VCC;
-	AY_CODE7_D_R.prn = VCC;
-	AY_CODE7_D_R.ena = VCC;
-	AY_SUB_ONE_R.d = (AY_CODE7_D & AY_C) or AY_CODE5_N_D;
-	AY_SUB_ONE_R.clk = TG42;
-	AY_SUB_ONE_R.clrn = VCC;
-	AY_SUB_ONE_R.prn = VCC;
-	AY_SUB_ONE_R.ena = VCC;
-	AY_BORROW3_N = LCELL(!AY_SUB_ONE or AY_CODE[2] or AY_CODE[0] or AY_CODE[1]);
-	AY_DAT_R[0].d = (AY_SUB_ONE & !AY_CODE[0]) or (!AY_SUB_ONE & AY_CODE[0]);
-
-	AY_AX[6] = LCELL(GND);
-	AY_DATA_LO_ZERO = LCELL((!AY_DAT[3] & !AY_DAT[5] & !AY_DAT[4]) & CASCADE(!AY_DAT[1] & !AY_DAT[2] & !AY_DAT[0]));
-	AY_AA_R[0].d = (!AY_GF[2] & !AY_ABLK & !AY_VA[0] & !AY_BINV) or (AY_GF[2] & !AY_ABLK & !AY_VA[0] & AY_BINV) or (AY_GF[2] & !AY_ABLK & AY_VA[0] & !AY_BINV) or (!AY_GF[2] & !AY_ABLK & AY_VA[0] & AY_BINV);
-
-	AY_AMP_R[2].d = (AY_AA[2] & AY_DAT[4]) # (AY_DAT[2] & !AY_DAT[4]);
-
-	AY_AA_R[1].d = (!AY_GF[2] & !AY_ABLK & !AY_VA[1] & !AY_BINV) or (AY_GF[2] & !AY_ABLK & !AY_VA[1] & AY_BINV) or (AY_GF[2] & !AY_ABLK & AY_VA[1] & !AY_BINV) or (!AY_GF[2] & !AY_ABLK & AY_VA[1] & AY_BINV);
-
-	AY_AA_R[2].d = (!AY_GF[2] & !AY_ABLK & !AY_VA[2] & !AY_BINV) or (AY_GF[2] & !AY_ABLK & !AY_VA[2] & AY_BINV) or (AY_GF[2] & !AY_ABLK & AY_VA[2] & !AY_BINV) or (!AY_GF[2] & !AY_ABLK & AY_VA[2] & AY_BINV);
-
-	AY_AA_R[3].d = (!AY_GF[2] & !AY_ABLK & !AY_VA[3] & !AY_BINV) or (AY_GF[2] & !AY_ABLK & !AY_VA[3] & AY_BINV) or (AY_GF[2] & !AY_ABLK & AY_VA[3] & !AY_BINV) or (!AY_GF[2] & !AY_ABLK & AY_VA[3] & AY_BINV);
-
-	AY_DI[0] = LCELL((BD[0] & AY_CCC0 & !AY_CCC1) or (!AY_CCC0 & AY_DAT[0]) or (AY_DAT[0] & AY_CCC1));
-
-	BD_R[0].clrn = VCC;
-
-	AY_BINV_R.d = (AY_GF[3] & AY_GF[1] & AY_VX & !AY_GF[0]) or (AY_GF[3] & !AY_GF[1] & AY_VX & AY_GF[0]);
-	AY_BINV_R.clk = TG42;
-	AY_BINV_R.clrn = VCC;
-	AY_BINV_R.prn = VCC;
-	AY_BINV_R.ena = VCC;
-	AY_BBLK_R.d = (AY_GF[0] & AY_VX) or (AY_VX & !AY_GF[3]);
-	AY_BBLK_R.clk = TG42;
-	AY_BBLK_R.clrn = VCC;
-	AY_BBLK_R.prn = VCC;
-	AY_BBLK_R.ena = VCC;
-	AY_CCC0_R.d = CT[0];
-	AY_CCC0_R.clk = TG42;
-	AY_CCC0_R.clrn = VCC;
-	AY_CCC0_R.prn = VCC;
-	AY_CCC0_R.ena = VCC;
-	AY_DI[7] = LCELL((BD[7] & !AY_CCC1 & AY_CCC0) or (AY_DAT[7] & !AY_CCC0) or (AY_DAT[7] & AY_CCC1));
-	AY_DI[6] = LCELL((AY_DAT[6] & !AY_CCC0) or (AY_DAT[6] & AY_CCC1) or (BD[6] & !AY_CCC1 & AY_CCC0));
-	AY_AX[7] = LCELL(!AY_CCC1 & !AY_CCC0);
-
-	BD_R[5].clrn = AY_BD_HIGH_CLRN;
-
-	BD_R[6].clrn = AY_BD_HIGH_CLRN;
-
-	AY_DI[5] = LCELL((BD[5] & !AY_CCC1 & AY_CCC0) or (AY_DAT[5] & !AY_CCC0) or (AY_DAT[5] & AY_CCC1));
-
-	BD_R[7].clrn = AY_BD_HIGH_CLRN;
-
-	AY_CX_ENA_R.d = (AY_CCC1 & AY_CODE[6] & !AY_CODE[5] & !AY_CODE[7]) or (AY_CCC1 & AY_CODE[6] & AY_CODE[5] & AY_CODE[7]);
-	AY_CX_ENA_R.clk = TG42;
-	AY_CX_ENA_R.clrn = VCC;
-	AY_CX_ENA_R.prn = VCC;
-	AY_CX_ENA_R.ena = VCC;
-	AY_MEM_WRITE_N = LCELL((AY_CXX_N & AY_CODE[7]) or AY_CODE[5] or !AY_CODE[6]);
-	AY_CX_CLEAR_R.d = AY_CCC1 & !AY_CODE[6] & !AY_CODE[5] & !AY_CODE[7];
-	AY_CX_CLEAR_R.clk = TG42;
-	AY_CX_CLEAR_R.clrn = VCC;
-	AY_CX_CLEAR_R.prn = VCC;
-	AY_CX_CLEAR_R.ena = VCC;
-	AY_DAT_WR_R.d = AY_CODE[6] or !AY_CCC1;
-	AY_DAT_WR_R.clk = TG42;
-	AY_DAT_WR_R.clrn = VCC;
-	AY_DAT_WR_R.prn = VCC;
-	AY_DAT_WR_R.ena = VCC;
-	AY_DAT_WR_D_R.d = AY_DAT_WR;
-	AY_DAT_WR_D_R.clk = TG42;
-	AY_DAT_WR_D_R.clrn = VCC;
-	AY_DAT_WR_D_R.prn = VCC;
-	AY_DAT_WR_D_R.ena = VCC;
-	AY_NOISE_ENA = LCELL(!AY_CXX_N & AY_NOISE_WR);
-	AY_DAT_ENA = LCELL(!AY_DAT_WR_D);
-	AY_TYPE010_R.d = !AY_CODE[7] & !AY_CODE[5] & AY_CODE[6];
-	AY_TYPE010_R.clk = TG42;
-	AY_TYPE010_R.clrn = VCC;
-	AY_TYPE010_R.prn = VCC;
-	AY_TYPE010_R.ena = VCC;
-	AY_VAR_R.d = !AY_VAR;
-	AY_VAR_R.clk = TG42;
-	AY_VAR_R.clrn = AY_F_RES;
-	AY_VAR_R.prn = VCC;
-	AY_VAR_R.ena = AY_ENVELOPE_WR;
-	AY_VA_R[1].d = (AY_VA[1] $ AY_ENV_CARRY1);
-
-	AY_VA_R[2].d = (AY_VA[2] $ AY_ENV_CARRY2);
-
-	AY_VA_R[3].d = (AY_VA[3] $ AY_ENV_CARRY3);
-
-	AY_ABLK_R.d = (AY_VX & !AY_GF[3] & VCC) or (AY_VX & GND & AY_ENV_CARRY4) or (!AY_VX & GND & !AY_ENV_CARRY4);
-	AY_ABLK_R.clk = TG42;
-	AY_ABLK_R.clrn = VCC;
-	AY_ABLK_R.prn = VCC;
-	AY_ABLK_R.ena = VCC;
-	AY_VX_R.d = AY_ENV_CARRY5;
-	AY_VX_R.clk = TG42;
-	AY_VX_R.clrn = AY_F_RES;
-	AY_VX_R.prn = VCC;
-	AY_VX_R.ena = AY_ENVELOPE_WR;
-	AY_VA_R[0].d = (!AY_VA[0] & AY_VAR) or (AY_VA[0] & !AY_VAR);
-
-	AY_ENVELOPE_WR_R.d = !AY_BBLK & !AY_CX_N & AY_ENVELOPE_CODE & AY_CCC1;
-	AY_ENVELOPE_WR_R.clk = TG42;
-	AY_ENVELOPE_WR_R.clrn = VCC;
-	AY_ENVELOPE_WR_R.prn = VCC;
-	AY_ENVELOPE_WR_R.ena = VCC;
-	AY_SH_N_R[13].d = AY_SH_N[14];
-
-	AY_DAT_R[5].d = (AY_CODE[5] $ AY_SUB_BORROW1);
-
-	AY_DAT_R[6].d = (AY_CODE[6] $ AY_SUB_BORROW2);
-
-	AY_DAT_R[7].d = (AY_CODE[7] $ AY_SUB_BORROW3);
-
-	AY_C_R.d = AY_SUB_BORROW4;
-	AY_C_R.clk = TG42;
-	AY_C_R.clrn = VCC;
-	AY_C_R.prn = VCC;
-	AY_C_R.ena = AY_DAT_ENA;
-	AY_BORROW4 = LCELL(AY_BORROW1 & !AY_CODE[3] & !AY_CODE[1] & !AY_CODE[2]);
-	AY_DAT_R[2].d = (!AY_BORROW1 & AY_CODE[2]) or (AY_BORROW1 & !AY_CODE[1] & !AY_CODE[2]) or (AY_CODE[1] & AY_CODE[2]);
-
-	AY_DAT_R[4].d = (AY_BORROW4 & !AY_CODE[4]) or (!AY_BORROW4 & AY_CODE[4]);
-
-	AY_SH_N_R[16].d = (!AY_SH_N[3] & !AY_SH_N[0]) or (AY_SH_N[3] & AY_SH_N[0]);
-
-	AY_SH_N_R[15].d = AY_SH_N[16];
-
-	AY_SH_N_R[4].d = AY_SH_N[5];
-
-	AY_SH_N_R[14].d = AY_SH_N[15];
-
-	AY_SH_N_R[3].d = AY_SH_N[4];
-
-	AY_SH_N_R[2].d = AY_SH_N[3];
-
-	AY_SH_N_R[0].d = AY_SH_N[1];
-
-	AY_SH_N_R[1].d = AY_SH_N[2];
-
-	AY_SH_N_R[5].d = AY_SH_N[6];
-
-	AY_SH_N_R[12].d = AY_SH_N[13];
-
-	AY_SH_N_R[11].d = AY_SH_N[12];
-
-	AY_SH_N_R[10].d = AY_SH_N[11];
-
-	AY_SH_N_R[9].d = AY_SH_N[10];
-
-	AY_SH_N_R[8].d = AY_SH_N[9];
-
-	AY_SH_N_R[7].d = AY_SH_N[8];
-
-	AY_SH_N_R[6].d = AY_SH_N[7];
-
-	AY_CXX_N_R.d = (AY_CXX_HOLD & AY_TYPE010) # (!AY_CX_RELOAD & !AY_TYPE010);
-	AY_CXX_N_R.clk = TG42;
-	AY_CXX_N_R.clrn = !AY_CX_CLEAR;
-	AY_CXX_N_R.prn = VCC;
-	AY_CXX_N_R.ena = AY_CX_ENA;
-	AY_CX_N_R.d = (AY_CX_HOLD & AY_TYPE010) # (!AY_CX_RELOAD & !AY_TYPE010);
-	AY_CX_N_R.clk = TG42;
-	AY_CX_N_R.clrn = !AY_CX_CLEAR;
-	AY_CX_N_R.prn = VCC;
-	AY_CX_N_R.ena = AY_CX_ENA;
-	AY_DATA_ZERO0 = LCELL(!AY_DAT[6] & AY_DATA_LO_ZERO & !AY_DAT[7]);
-	AY_CX_HOLD = LCELL(!AY_DATA_ZERO0 or AY_CX_N);
-	AY_CX_RELOAD_R.d = (!/RESET & AY_CODE[0]) # (!AY_F_RES & !AY_CODE[0]);
-	AY_CX_RELOAD_R.clk = TG42;
-	AY_CX_RELOAD_R.clrn = VCC;
-	AY_CX_RELOAD_R.prn = VCC;
-	AY_CX_RELOAD_R.ena = VCC;
-	AY_CODE0_D_R.d = AY_CODE[0];
-	AY_CODE0_D_R.clk = TG42;
-	AY_CODE0_D_R.clrn = VCC;
-	AY_CODE0_D_R.prn = VCC;
-	AY_CODE0_D_R.ena = VCC;
-	AY_DATA_ZERO1 = LCELL(!AY_DAT[6] & AY_DATA_LO_ZERO & !AY_DAT[7]);
-	AY_CXX_HOLD = LCELL((!AY_C & AY_CXX_N) or (!AY_C & !AY_DATA_ZERO1) or (!AY_CODE0_D & AY_CXX_N) or (!AY_CODE0_D & !AY_DATA_ZERO1));
-	AY_ADDR_PORT_R.d = PORT_XXX10000 & !DCPP[5] & !DCPP[6] & DCPP[7];
-	AY_ADDR_PORT_R.clk = TG42;
-	AY_ADDR_PORT_R.clrn = VCC;
-	AY_ADDR_PORT_R.prn = VCC;
-	AY_ADDR_PORT_R.ena = VCC;
-	AY_DATA_PORT_R.d = PORT_XXX10001 & !DCPP[5] & !DCPP[6] & DCPP[7];
-	AY_DATA_PORT_R.clk = TG42;
-	AY_DATA_PORT_R.clrn = VCC;
-	AY_DATA_PORT_R.prn = VCC;
-	AY_DATA_PORT_R.ena = VCC;
-	AY_A_WR_R.d = /WR or !IO_WINDOW or !AY_ADDR_PORT;
-	AY_A_WR_R.clk = TG42;
-	AY_A_WR_R.clrn = VCC;
-	AY_A_WR_R.prn = VCC;
-	AY_A_WR_R.ena = VCC;
-	AY_WR = LCELL((!BWR & AY_CCC0 & !AY_CCC1) or (!AY_MEM_WRITE_N & AY_CCC1));
-	AY_D_WR_R.d = /WR or !IO_WINDOW or !AY_DATA_PORT;
-	AY_D_WR_R.clk = TG42;
-	AY_D_WR_R.clrn = VCC;
-	AY_D_WR_R.prn = VCC;
-	AY_D_WR_R.ena = VCC;
-	BWR_R.d = AY_D_WR;
-	BWR_R.clk = TG42;
-	BWR_R.clrn = VCC;
-	BWR_R.prn = VCC;
-	BWR_R.ena = AY_CCC1;
-	AY_F_R1_R.d = BWR or !AY_AAX0;
-	AY_F_R1_R.clk = TG42;
-	AY_F_R1_R.clrn = VCC;
-	AY_F_R1_R.prn = VCC;
-	AY_F_R1_R.ena = VCC;
-
-	AY_CCC5_R.d = CT[5];
-	AY_CCC5_R.clk = TG42;
-	AY_CCC5_R.clrn = VCC;
-	AY_CCC5_R.prn = VCC;
-	AY_CCC5_R.ena = VCC;
-	AY_ENV_CARRY1 = AY_VAR & AY_VA[0];
-	AY_ENV_CARRY2 = AY_VA[1] & AY_ENV_CARRY1;
-	AY_ENV_CARRY3 = AY_VA[2] & AY_ENV_CARRY2;
-	AY_ENV_CARRY4 = AY_VA[3] & AY_ENV_CARRY3;
-	AY_ENV_CARRY5 = (AY_VX $ AY_ENV_CARRY4);
-	AY_SUB_BORROW1 = !AY_CODE[4] & AY_BORROW4;
-	AY_SUB_BORROW2 = !AY_CODE[5] & AY_SUB_BORROW1;
-	AY_SUB_BORROW3 = !AY_CODE[6] & AY_SUB_BORROW2;
-	AY_SUB_BORROW4 = !AY_CODE[7] & AY_SUB_BORROW3;
-	ROM.data[] = (AY_DI[1], AY_DI[7], AY_DI[5], AY_DI[3], AY_DI[6], AY_DI[0], AY_DI[2], AY_DI[4]);
-	ROM.address[] = (AY_AX[7], AY_AX[6], AY_AX[5], AY_AX[4], AY_AX[3], AY_AX[2], AY_AX[1], AY_AX[0]);
-	ROM.we = AY_WR;
-	ROM.inclock = TG42;
-	ROM.outclock = TG42;
-	AY_CODE[4] = ROM.q[0];
-	AY_CODE[2] = ROM.q[1];
-	AY_CODE[0] = ROM.q[2];
-	AY_CODE[6] = ROM.q[3];
-	AY_CODE[3] = ROM.q[4];
-	AY_CODE[5] = ROM.q[5];
-	AY_CODE[7] = ROM.q[6];
-	AY_CODE[1] = ROM.q[7];
-
-	-- Combinational Q aliases: no extra FF, LCELL or delay.
-	AY_AA[] = AY_AA_R[].q;
-	AY_AAX0 = AY_AAX0_R.q;
-	AY_ABLK = AY_ABLK_R.q;
-	AY_ADDR_PORT = AY_ADDR_PORT_R.q;
-	AY_ADR[] = AY_ADR_R[].q;
-	AY_AMP[] = AY_AMP_R[].q;
-	AY_A_WR = AY_A_WR_R.q;
-	AY_BBLK = AY_BBLK_R.q;
-	AY_BEEPER_SAMPLE = AY_BEEPER_SAMPLE_R.q;
-	AY_BINV = AY_BINV_R.q;
-	AY_C = AY_C_R.q;
-	AY_CCC0 = AY_CCC0_R.q;
-	AY_CCC1 = AY_CCC1_R.q;
-	AY_CCC2 = AY_CCC2_R.q;
-	AY_CCC3 = AY_CCC3_R.q;
-	AY_CCC4 = AY_CCC4_R.q;
-	AY_CCC5 = AY_CCC5_R.q;
-	AY_CCC6 = AY_CCC6_R.q;
-	AY_CCC7_N = AY_CCC7_N_R.q;
-	AY_CH_MIX = AY_CH_MIX_R.q;
-	AY_CODE0_D = AY_CODE0_D_R.q;
-	AY_CODE5_N_D = AY_CODE5_N_D_R.q;
-	AY_CODE7_D = AY_CODE7_D_R.q;
-	AY_CXX_N = AY_CXX_N_R.q;
-	AY_CX_CLEAR = AY_CX_CLEAR_R.q;
-	AY_CX_ENA = AY_CX_ENA_R.q;
-	AY_CX_N = AY_CX_N_R.q;
-	AY_CX_RELOAD = AY_CX_RELOAD_R.q;
-	AY_DAT[] = AY_DAT_R[].q;
-	AY_DATA_PORT = AY_DATA_PORT_R.q;
-	AY_DAT_WR = AY_DAT_WR_R.q;
-	AY_DAT_WR_D = AY_DAT_WR_D_R.q;
-	AY_DD[] = AY_DD_R[].q;
-	AY_DQX[] = AY_DQX_R[].q;
-	AY_D_WR = AY_D_WR_R.q;
-	AY_ENVELOPE_WR = AY_ENVELOPE_WR_R.q;
-	AY_FORM_WR = AY_FORM_WR_R.q;
-	AY_F_R1 = AY_F_R1_R.q;
-	AY_F_RES = AY_F_RES_R.q;
-	AY_F_RES_D = AY_F_RES_D_R.q;
-	AY_GF[] = AY_GF_R[].q;
-	AY_MIXER[] = AY_MIXER_R[].q;
-	AY_MIXER_WR = AY_MIXER_WR_R.q;
-	AY_NOISE_TONE2_SLOT = AY_NOISE_TONE2_SLOT_R.q;
-	AY_NOISE_WR = AY_NOISE_WR_R.q;
-	AY_OUT1 = AY_OUT1_R.q;
-	AY_OUT2 = AY_OUT2_R.q;
-	AY_OUT3 = AY_OUT3_R.q;
-	AY_SAMPLE_END = AY_SAMPLE_END_R.q;
-	AY_SAMPLE_START = AY_SAMPLE_START_R.q;
-	AY_SH_N[] = AY_SH_N_R[].q;
-	AY_SUB_ONE = AY_SUB_ONE_R.q;
-	AY_TONE12_SLOT = AY_TONE12_SLOT_R.q;
-	AY_TONE1_SLOT = AY_TONE1_SLOT_R.q;
-	AY_TONE1_WR = AY_TONE1_WR_R.q;
-	AY_TONE1_WR_D = AY_TONE1_WR_D_R.q;
-	AY_TONE23_SLOT = AY_TONE23_SLOT_R.q;
-	AY_TONE2_WR = AY_TONE2_WR_R.q;
-	AY_TONE3_SLOT_1 = AY_TONE3_SLOT_1_R.q;
-	AY_TONE3_WR = AY_TONE3_WR_R.q;
-	AY_TONE3_WR_D = AY_TONE3_WR_D_R.q;
-	AY_TONE_WR = AY_TONE_WR_R.q;
-	AY_TYPE010 = AY_TYPE010_R.q;
-	AY_VA[] = AY_VA_R[].q;
-	AY_VAR = AY_VAR_R.q;
-	AY_VX = AY_VX_R.q;
-	BD[] = BD_R[].q;
-	BWR = BWR_R.q;
+    -- All state samples TG42 rising except CPU address and the two-stage
+    -- envelope reset release, which retain their original derived clocks.
+    AY_CCC[].clk = CLK42;
+    AY_CCC[] = (!AY_T7,AY_T[6..0]);
+    AY_ADR[].clk = AY_A_WR;
+    AY_ADR[] = D[3..0];
+    AY_SHAPE_ADR_R.d = D[3..0] == H"D"; AY_SHAPE_ADR_R.clk = AY_A_WR;
+    AY_CPU_MASK4_N = LCELL(!(AY_ADR[] == B"00X1") & !(AY_ADR[] == B"0101"));
+    AY_CPU_MASK7_N = LCELL(!(AY_ADR[] == B"00X1") & !(AY_ADR[] == B"0101") & !(AY_ADR[] == B"0110"));
+    BD[].clk = CLK42; BD[].ena = AY_CCC1; BD[] = D[];
+    BD[3..0].clrn = VCC;
+    BD4.clrn = AY_CPU_MASK4_N; BD[7..5].clrn = AY_CPU_MASK7_N;
+    BWR.d = AY_D_WR; BWR.clk = CLK42; BWR.ena = AY_CCC1;
+    SHAPE_RESTART_N.d = BWR or !AY_SHAPE_ADR_R; SHAPE_RESTART_N.clk = CLK42;
+    ENV_RESET_PIPE[].clk = AY_CCC7;
+    ENV_RESET_PIPE[].clrn = SHAPE_RESTART_N;
+    ENV_RESET_PIPE[] = (ENV_RESET_PIPE0,VCC);
+
+    -- Logical lanes0..7 = physical3,7,0,4,1,5,2,6.
+    AY_DO[] = (AY_RAM_Q6,AY_RAM_Q2,AY_RAM_Q5,AY_RAM_Q1,AY_RAM_Q4,AY_RAM_Q0,AY_RAM_Q7,AY_RAM_Q3);
+    AYDQ[] = AY_RAM_Q[];
+    AY_READ_CAPTURE_EN = LCELL(!AY_CCC1 & !AY_CCC0);
+    RAM_SCAN = AY_READ_CAPTURE_EN;
+
+    -- Phase01 writes BD; all other phases write the decremented period byte.
+    -- Keep the original SOP at each byte-lane LUT, without a separate CPU
+    -- phase fanout cell. The bank still has one common mux function.
+    FOR i IN 0 TO 7 GENERATE
+        RAM_DATA_BUFFER[i] = LCELL((BD[i] & !AY_CCC1 & AY_CCC0) or (AY_DAT[i] & !AY_CCC0) or (AY_DAT[i] & AY_CCC1));
+    END GENERATE;
+    AY_DI[] = (RAM_DATA_BUFFER1,RAM_DATA_BUFFER7,RAM_DATA_BUFFER5,RAM_DATA_BUFFER3,RAM_DATA_BUFFER0,RAM_DATA_BUFFER6,RAM_DATA_BUFFER4,RAM_DATA_BUFFER2);
+
+    -- Keep the two real low-address mux boundaries. Each stage is a word;
+    -- the LCELL arrays represent the original CPU/scan and indirect-port cuts.
+
+    FOR i IN 0 TO 3 GENERATE
+        RAM_ADDR_CPU_SCAN[i] = LCELL((AY_ADR[i] & AY_CCC0 & !AY_CCC1) or (!AY_CCC0 & AY_CCC[i+2] & !AY_CCC1));
+        RAM_ADDR_LOW[i] = LCELL(RAM_ADDR_CPU_SCAN[i] or (AY_DO[i] & AY_CCC1));
+    END GENERATE;
+    AY_AX[3..0] = RAM_ADDR_LOW[];
+    AY_AX4 = LCELL((AY_CCC6 & RAM_SCAN) or (AY_CCC1 & AY_DO4));
+    AY_AX5 = LCELL(AY_CCC7 & RAM_SCAN);
+    AY_AX6 = GND; AY_AX7 = RAM_SCAN;
+    RAM_OP_WRITE_N = LCELL((AY_CXX & AY_DO7) or AY_DO5 or !AY_DO6);
+    AY_WR = LCELL((!BWR & AY_CCC0 & !AY_CCC1) or (!RAM_OP_WRITE_N & AY_CCC1));
+    AY_RAM_Q[] = lpm_ram_dq(AY_DI[],AY_AX[],AY_WR,CLK42,CLK42)
+        WITH(lpm_width=8,lpm_widthad=8,lpm_file="AY.MIF");
+
+    DAT_WRITE_R.d = AY_DO6 or !AY_CCC1; DAT_WRITE_R.clk = CLK42;
+    DAT_WRITE_DELAY_R.d = DAT_WRITE_R; DAT_WRITE_DELAY_R.clk = CLK42;
+    AY_DAT_EN = LCELL(!DAT_WRITE_DELAY_R);
+    BORROW_BASE_R.d = !AY_DO5; BORROW_BASE_R.clk = CLK42;
+    PERIOD_HIGH_R.d = AY_DO7; PERIOD_HIGH_R.clk = CLK42;
+    BORROW_IN_R.d = (PERIOD_HIGH_R & AY_C) or BORROW_BASE_R; BORROW_IN_R.clk = CLK42;
+    (AY_C.clk,AY_DAT[].clk) = CLK42;
+    (AY_C.ena,AY_DAT[].ena) = AY_DAT_EN;
+    (AY_C,AY_DAT[]) = (GND,AY_DO[]) - (B"00000000",BORROW_IN_R);
+    AY_DAT_ZERO = LCELL((AY_DAT[3..0] == 0) & CASCADE(AY_DAT[7..4] == 0));
+    AY_DAT_ZERO_TONE = LCELL(AY_DAT_ZERO);
+    AY_DAT_ZERO_NOISE = LCELL(AY_DAT_ZERO);
+
+    -- Opcode011 selects channel1,2,3,noise,envelope,mixer,shape by low3 bits.
+    -- Preserve decoder LCELL boundaries shared by the registered slot controls.
+    OP_AUDIO = AY_CCC1 & (AY_DO[7..5] == B"011");
+    DECODE_CH1 = LCELL(AY_CCC1 & (AY_DO[2..0] == 1));
+    DECODE_CH2 = LCELL(AY_CCC1 & (AY_DO[2..0] == 2));
+    DECODE_CH3 = LCELL(AY_CCC1 & (AY_DO[2..0] == 3));
+    DECODE_NOISE = LCELL(AY_CCC1 & (AY_DO[2..0] == 4));
+    DECODE_ENV = LCELL(AY_DO6 & AY_DO5 & AY_DO2 & !AY_DO1);
+    DECODE_MIXER = LCELL(AY_CCC1 & (AY_DO[2..0] == 6));
+    DECODE_SHAPE = LCELL(AY_CCC1 & (AY_DO[2..0] == 7));
+    DECODE_AMP = LCELL(AY_CCC1 & ((AY_DO1 & !AY_DO2) or (!AY_DO2 & AY_DO0)));
+    SLOT_CH[].clk = CLK42;
+    SLOT_CH1 = DECODE_CH1 & (AY_DO[7..5] == B"011");
+    SLOT_CH2 = DECODE_CH2 & (AY_DO[7..5] == B"011");
+    SLOT_CH3 = DECODE_CH3 & (AY_DO[7..5] == B"011");
+    SLOT_NOISE.d = DECODE_NOISE & (AY_DO[7..5] == B"011"); SLOT_NOISE.clk = CLK42;
+    SLOT_ENV.d = LCELL(!ENV_STOP_R & AY_CCC1 & !AY_CX) & DECODE_ENV & AY_DO0 & !AY_DO7; SLOT_ENV.clk = CLK42;
+    SLOT_MIXER.d = DECODE_MIXER & (AY_DO[7..5] == B"011"); SLOT_MIXER.clk = CLK42;
+    SLOT_SHAPE.d = DECODE_SHAPE & (AY_DO[7..5] == B"011"); SLOT_SHAPE.clk = CLK42;
+    SLOT_AMP.d = DECODE_AMP & (AY_DO[7..5] == B"011"); SLOT_AMP.clk = CLK42;
+    SLOT_RESET.d = AY_CCC1 & (AY_DO[7..5] == 0); SLOT_RESET.clk = CLK42;
+    SLOT_COUNT.d = AY_CCC1 & ((AY_DO[7..5] == B"010") or (AY_DO[7..5] == B"111")); SLOT_COUNT.clk = CLK42;
+    SLOT_PERIOD.d = AY_DO[7..5] == B"010"; SLOT_PERIOD.clk = CLK42;
+    PERIOD_RESET_R.d = (!/RESET & AY_DO0) or (!ENV_RESET_PIPE1 & !AY_DO0); PERIOD_RESET_R.clk = CLK42;
+    PERIOD_LOW_R.d = AY_DO0; PERIOD_LOW_R.clk = CLK42;
+    PERIOD_TONE_NEXT = LCELL(!AY_DAT_ZERO_TONE or AY_CX);
+    PERIOD_NOISE_NEXT = LCELL((!AY_C or !PERIOD_LOW_R) & (AY_CXX or !AY_DAT_ZERO_NOISE));
+    (AY_CX.clk,AY_CXX.clk) = CLK42;
+    (AY_CX.clrn,AY_CXX.clrn) = !SLOT_RESET;
+    (AY_CX.ena,AY_CXX.ena) = SLOT_COUNT;
+    IF SLOT_PERIOD THEN
+        AY_CX = PERIOD_TONE_NEXT; AY_CXX = PERIOD_NOISE_NEXT;
+    ELSE AY_CX = !PERIOD_RESET_R; AY_CXX = !PERIOD_RESET_R; END IF;
+
+    TONE[].clk = CLK42;
+    FOR ch IN 1 TO 3 GENERATE
+        TONE[ch].ena = SLOT_CH[ch];
+        TONE[ch] = TONE[ch] $ !AY_CX;
+        MIX_GATE[ch] = LCELL((TONE[ch] or AY_X_[ch-1]) & (AY_X_[ch+2] or !AY_SH0));
+    END GENERATE;
+    AY_X_[].clk = CLK42; AY_X_[].ena = SLOT_MIXER; AY_X_[] = AY_DAT[5..0];
+    MIX_SELECT_A = LCELL((MIX_GATE3 & AY_DO0) or (!AY_DO0 & MIX_GATE2));
+    AY_CH_MIX.d = (MIX_SELECT_A & AY_DO1) or (MIX_GATE1 & !AY_DO1); AY_CH_MIX.clk = CLK42;
+    NOISE_TICK = LCELL(!AY_CXX & SLOT_NOISE);
+    -- Early28a stores the complemented noise phase, with asynchronous clear.
+    -- This is an XNOR shift word, unlike the later author's preset/XOR phase.
+    AY_SH[].clk = CLK42; AY_SH[].ena = NOISE_TICK; AY_SH[].clrn = /RESET;
+    AY_SH[] = (!(AY_SH3 $ AY_SH0),AY_SH[16..1]);
+
+    -- Six-bit envelope ramp: lowbit is rate phase, next4 are volume, bit5
+    -- marks the first completed period. Reset release is ENV_RESET_PIPE1.
+    AY_ENV[].clk = CLK42; AY_ENV[].ena = SLOT_ENV;
+    AY_ENV[].clrn = ENV_RESET_PIPE1; AY_ENV[] = AY_ENV[] + 1;
+    AY_GF[].clk = CLK42; AY_GF[].ena = SLOT_SHAPE; AY_GF[] = AY_DAT[3..0];
+    ENV_STOP_R.d = AY_ENV5 & (AY_GF0 or !AY_GF3); ENV_STOP_R.clk = CLK42;
+    ENV_ZERO_R.d = AY_ENV5 & !AY_GF3; ENV_ZERO_R.clk = CLK42;
+    ENV_INVERT_R.d = AY_ENV5 & AY_GF3 & (AY_GF0 $ AY_GF1); ENV_INVERT_R.clk = CLK42;
+    AY_AA[].clk = CLK42;
+    AY_AA[] = !(AY_ENV[4..1] $ AY_GF2 $ ENV_INVERT_R) & !ENV_ZERO_R;
+    AY_AMP[].clk = CLK42;
+    IF AY_DAT4 THEN AY_AMP[] = AY_AA[]; ELSE AY_AMP[] = AY_DAT[3..0]; END IF;
+    BEEPER_R.d = BEEPER & SLOT_NOISE; BEEPER_R.clk = CLK42;
+    AY_DQX[].clk = CLK42; AY_DQX[].ena = SLOT_AMP;
+    AY_DQX[].clrn = !SLOT_NOISE;
+    AY_DQX[].prn = B"0010" or !BEEPER_R;
+    AY_DQX[] = AY_AMP[] & AY_CH_MIX;
+
+    -- Independent left/right slot pipelines: left is channels2+3, right1+2.
+    CH3_DELAY_R.d = SLOT_CH3; CH3_DELAY_R.clk = CLK42;
+    CH3_WIDE_R.d = SLOT_CH3 or CH3_DELAY_R; CH3_WIDE_R.clk = CLK42;
+    CH1_DELAY_R.d = SLOT_CH1; CH1_DELAY_R.clk = CLK42;
+    CH1_WIDE_R.d = SLOT_CH1 or CH1_DELAY_R; CH1_WIDE_R.clk = CLK42;
+    CENTER_WIDE_R.d = SLOT_NOISE or SLOT_CH2; CENTER_WIDE_R.clk = CLK42;
+    SUM_L_STAGE_R.d = CENTER_WIDE_R or CH3_WIDE_R or SLOT_CH3 or SLOT_CH2; SUM_L_STAGE_R.clk = CLK42;
+    SUM_R_STAGE_R.d = CENTER_WIDE_R or CH1_WIDE_R or SLOT_CH1 or SLOT_CH2; SUM_R_STAGE_R.clk = CLK42;
+    SUM_L_EN_R.d = SUM_L_STAGE_R; SUM_L_EN_R.clk = CLK42;
+    SUM_R_EN_R.d = SUM_R_STAGE_R; SUM_R_EN_R.clk = CLK42;
+    SAMPLE_PHASE = LCELL(AY_CCC5 & AY_CCC4 & !AY_CCC3);
+    CLEAR_PHASE = LCELL(!AY_CCC3 & !AY_CCC5 & !AY_CCC4);
+    SAMPLE_VALID_R.d = SAMPLE_PHASE & AY_CCC7 & !AY_CCC2 & AY_CCC6; SAMPLE_VALID_R.clk = CLK42;
+    SUM_CLEAR_R.d = CLEAR_PHASE & !AY_CCC7 & !AY_CCC2 & !AY_CCC6; SUM_CLEAR_R.clk = CLK42;
+-- Logical AY amplitude, after restoring the physical CASE-to-adder lane order.
+-- OLD_AHDL/SP2000/AY.TDF:321-339 has the identical16 levels.
+-- The raw CASE tuple numeric value is not the logical adder operand value.
+	AY_CH_CS[].clk = CLK42;
+	CASE AY_DQX[] IS
+      WHEN 0 => AY_CH_CS[] = 0;
+      WHEN 1 => AY_CH_CS[] = 2;
+      WHEN 2 => AY_CH_CS[] = 4;
+      WHEN 3 => AY_CH_CS[] = 6;
+      WHEN 4 => AY_CH_CS[] = 8;
+      WHEN 5 => AY_CH_CS[] = 11;
+      WHEN 6 => AY_CH_CS[] = 16;
+      WHEN 7 => AY_CH_CS[] = 22;
+      WHEN 8 => AY_CH_CS[] = 32;
+      WHEN 9 => AY_CH_CS[] = 45;
+      WHEN 10 => AY_CH_CS[] = 64;
+      WHEN 11 => AY_CH_CS[] = 90;
+      WHEN 12 => AY_CH_CS[] = 127;
+      WHEN 13 => AY_CH_CS[] = 180;
+      WHEN 14 => AY_CH_CS[] = 255;
+      WHEN 15 => AY_CH_CS[] = 360;
+    END CASE;
+
+-- AY stereo: 11-bit accumulators, TG42 rising, clear=!SUM_CLEAR_R.
+-- Left enable=SUM_L_EN_R; right enable=SUM_R_EN_R. These are distinct slot FF.
+	AY_CH_LX[] = AY_CH_LX[] + (B"00",AY_CH_CS[]);
+	AY_CH_RX[] = AY_CH_RX[] + (B"00",AY_CH_CS[]);
+
+	AY_CH_LX[].clk	= CLK42;
+	AY_CH_RX[].clk	= CLK42;
+	AY_CH_LX[].ena	= SUM_L_EN_R;
+	AY_CH_RX[].ena = SUM_R_EN_R;
+	(AY_CH_LX[].clrn,AY_CH_RX[].clrn)	= !SUM_CLEAR_R;
+
+	AY_CH_VAL	= SAMPLE_VALID_R;
+	AY_CH_L[] = AY_CH_LX[10..1];
+	AY_CH_R[] = AY_CH_RX[10..1];
+
+--	AY_CH_A/B/C — dead-порты (TOP не подключает), драйв = GND
+	AY_CH_A[] = GND;
+	AY_CH_B[] = GND;
+	AY_CH_C[] = GND;
+
+	BIT_CLOCK_DELAY = AY_CCC2; -- existing internal CT2 delay, distinct from DAC pad FF
 END;

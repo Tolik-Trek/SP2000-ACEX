@@ -1,58 +1,26 @@
-FUNCTION acceler (
-	/RD,
-	/WR,
-	/IO,
-	D[7..0],
-	A[15..0],
-	/RF,
-	/M1,
-	/RESET,
-	MD[15..0],
-	/MR,
-	TG42,
-	CT[5..0],
-	DCPP[7..0],
-	PAGE[15..0],
-	RETI_CODE_4D,
-	ED_CODE_HI,
-	IO_WINDOW,
-	CT_5_ENA,
-	CT_6_ENA,
-	CAS,
-	MC_TYPE,
-	MC_VIDEO_SELECT,
-	DRAM_WRITE_D,
-	DRAM_RW_MASK,
-	MC_END,
-	MC_BEGIN,
-	PORT_MD_HIGH,
-	VRAM_DATA_ENA,
-	CLK_Z80,
-	MEMORY_LOW_WINDOW_N,
-	ACC_PORT_WRITE_N,
-	IO_READ_CLK,
-	HDDR_ENA,
-	PORT_MD[7..0],
-	ALL_MODE0_N,
-	HDD_FLIP,
-	HDD_DATA,
-	PORT_44_4C_C4_CC,
-	GRAF_X
-) RETURNS (
-	G_LINE[7..0],
-	AA[15..0],
-	G_LINE_NEXT[7..0],
-	AA_NEXT[15..0],
-	MD_OUT[15..0],
-	ACC_CYCLE_END,
-	ACC_WORD_STEP,
-	ACC_DISABLED,
-	START_ACC,
-	HDDR[7..0],
-	ACC_DRIVE[7..0],
-	DOUBLE_CAS_N,
-	IN_OUT_CMD,
-	AA1_D,
-	ACC_DRIVE_FF_D,
-	MD_HIGH_FF_D
-);
+-- Copyright (C) 1988-2000 Altera Corporation
+-- Any megafunction design, and related net list (encrypted or decrypted),
+-- support information, device programming or simulation file, and any other
+-- associated documentation or information provided by Altera or a partner
+-- under Altera's Megafunction Partnership Program may be used only to
+-- program PLD devices (but not masked PLD devices) from Altera.  Any other
+-- use of such megafunction design, net list, support information, device
+-- programming or simulation file, or any other related documentation or
+-- information is prohibited for any other purpose, including, but not
+-- limited to modification, reverse engineering, de-compiling, or use with
+-- any other silicon devices, unless such use is explicitly licensed under
+-- a separate agreement with Altera or a megafunction partner.  Title to
+-- the intellectual property, including patents, copyrights, trademarks,
+-- trade secrets, or maskworks, embodied in any such megafunction design,
+-- net list, support information, device programming or simulation file, or
+-- any other related documentation or information provided by Altera or a
+-- megafunction partner, remains with Altera, the megafunction partner, or
+-- their respective licensors.  No other licenses, including any licenses
+-- needed under any third party's intellectual property, are provided herein.
+
+-- MAX+plus II Include File
+-- Version 10.0 9/14/2000
+-- Created: Fri Jan 25 12:59:19 2002
+
+FUNCTION acceler (clk42, /reset, ct[2..0], ras, cas, clk_z80, mc_end, mc_begin, mc_type, mc_write, ai[15..0], di[7..0], /io, /rd, /wr, /mr, /rf, /m1, /iom, dcp[7..0], mdi[15..0], acc_ena, hddr[7..0], hdd_flip, u0e, u1e, u2e, usel, uwrc7, FRACTION_STEP_EN, COUNT_LOAD_EN, ADDRESS_DOUBLE_STEP, vdwq[7..0])
+    RETURNS (continue, ao[15..0], mdo[15..0], md[7..0], g_line[7..0], glisser, acc_on, double_cas, acc_dir[7..0], ramq[7..0], ucnt[7..0], abah[7..0]);

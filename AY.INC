@@ -1,22 +1,26 @@
-FUNCTION ay (
-	/WR,
-	D[7..0],
-	/RESET,
-	TG42,
-	CT[5..0],
-	CTH[5..0],
-	DCPP[7..0],
-	IO_WINDOW,
-	PORT_XXX10000,
-	PORT_XXX10001,
-	PORT_C2_CA_DATA[4..0]
-) RETURNS (
-	AY_AX[7..0],
-	AY_DQX[3..0],
-	AY_TONE23_SLOT,
-	AY_TONE12_SLOT,
-	AY_SAMPLE_END,
-	AY_SAMPLE_START,
-	AY_PHASE2_FALL,
-	AY_DD[7..0]
-);
+-- Copyright (C) 1988-2000 Altera Corporation
+-- Any megafunction design, and related net list (encrypted or decrypted),
+-- support information, device programming or simulation file, and any other
+-- associated documentation or information provided by Altera or a partner
+-- under Altera's Megafunction Partnership Program may be used only to
+-- program PLD devices (but not masked PLD devices) from Altera.  Any other
+-- use of such megafunction design, net list, support information, device
+-- programming or simulation file, or any other related documentation or
+-- information is prohibited for any other purpose, including, but not
+-- limited to modification, reverse engineering, de-compiling, or use with
+-- any other silicon devices, unless such use is explicitly licensed under
+-- a separate agreement with Altera or a megafunction partner.  Title to
+-- the intellectual property, including patents, copyrights, trademarks,
+-- trade secrets, or maskworks, embodied in any such megafunction design,
+-- net list, support information, device programming or simulation file, or
+-- any other related documentation or information provided by Altera or a
+-- megafunction partner, remains with Altera, the megafunction partner, or
+-- their respective licensors.  No other licenses, including any licenses
+-- needed under any third party's intellectual property, are provided herein.
+
+-- MAX+plus II Include File
+-- Version 10.0 9/14/2000
+-- Created: Sat May 26 07:09:40 2001
+
+FUNCTION ay (/reset, clk42, ay_t[8..0], ay_d_wr, ay_a_wr, d[7..0], beeper)
+    RETURNS (aydq[7..0], ay_ch_a[3..0], ay_ch_b[3..0], ay_ch_c[3..0], ay_ch_l[9..0], ay_ch_r[9..0], ay_ch_val, AY_READ_CAPTURE_EN, bit_clock_delay);
