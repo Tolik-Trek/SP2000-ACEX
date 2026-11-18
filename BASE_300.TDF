@@ -11,17 +11,17 @@ PARAMETERS
 
 INCLUDE "lpm_ram_dp";
 INCLUDE "kbd";
--- INCLUDE "video";
+-- Historical uninstantiated interface: INCLUDE "video";
 INCLUDE "video2";
 
 INCLUDE	"dcp";
--- INCLUDE	"dcp2";
+-- Historical uninstantiated interface: INCLUDE	"dcp2";
 
 INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_218
+SUBDESIGN BASE_300
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -1013,11 +1013,13 @@ END GENERATE;
 
 	SVIDEO.DIR_PORT[3]		= RGMOD0;
 
-	IF (SCREEN_OFF == "USE") GENERATE
-		SVIDEO.DIR_PORT[4]		= RGMOD1;	-- 1 screen off, 0 - screen on
-	ELSE GENERATE
-		SVIDEO.DIR_PORT[4]		= GND;		-- 1 screen off, 0 - screen on
-	END GENERATE;
+-- Author alternative retained for lineage:
+-- 	IF (SCREEN_OFF == "USE") GENERATE
+-- 		SVIDEO.DIR_PORT[4]		= RGMOD1;	-- 1 screen off, 0 - screen on
+-- 	ELSE GENERATE
+-- 		SVIDEO.DIR_PORT[4]		= GND;		-- 1 screen off, 0 - screen on
+-- 	END GENERATE;
+	SVIDEO.DIR_PORT[4] = RGMOD2;
 
 	SVIDEO.DIR_PORT[2..1]	= GND;
 	SVIDEO.DIR_PORT[7..5]	= BORDER[2..0];
