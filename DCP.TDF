@@ -559,7 +559,7 @@ CAS		\__/  | \__/|\__/
 		WHEN 4 => W_TAB[] = 1;  WHEN 12 => W_TAB[] = 7;
 		WHEN 5 => W_TAB[] = 2;  WHEN 13 => W_TAB[] = 7;
 --		WHEN 6 => W_TAB[] = 10; WHEN 14 => W_TAB[] = 10;
-		WHEN 6 => W_TAB[] = 10; WHEN 14 => W_TAB[] = 10; -- BASE 2.17: native reverse confirms author alternative.
+		WHEN 6 => W_TAB[] = 7;  WHEN 14 => W_TAB[] = 7;
 --		WHEN 6 => W_TAB[] = 13; WHEN 14 => W_TAB[] = 13;
 		WHEN 7 => W_TAB[] = 10; WHEN 15 => W_TAB[] = 10;
 	END CASE;

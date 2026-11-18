@@ -21,7 +21,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_217
+SUBDESIGN BASE_218
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -34,7 +34,7 @@ SUBDESIGN BASE_217
 	/WR			: INPUT;
 	/RD			: INPUT;
 	/MR			: INPUT;
-	/HALT		: INPUT; -- сохранённый вход p182 оригинала; авторское имя
+	/HALT		: INPUT; -- авторское имя сохранённого входа p182
 	A[15..0]	: INPUT;
 	D[7..0]		: BIDIR;
 

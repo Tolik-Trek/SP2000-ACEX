@@ -196,11 +196,10 @@ BEGIN
 
 --  == accelerator grafic line ==
 
-	-- Один инкрементатор каждого существующего банка, как в R75 unit-counter.
 	AA_INC[] = AA[] + 1;
 	AGR_INC[] = AGR[] + 1;
 	AA_LOAD = DFF(START_ACC,CLK42,,);
-	AA_LOAD15 = AA_LOAD; -- тот же сигнал загрузки; отдельного буфера в R75 нет
+	AA_LOAD15 = AA_LOAD;
 
 	AGR[].clk	= CLK42;
 	AGR[].ena	= !DFF((/IOM or /WR or !DFF((DCP[] == B"1100X100"),CLK42,,)),CLK42,,) or
