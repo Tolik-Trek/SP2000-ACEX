@@ -375,9 +375,8 @@ BEGIN
 		WHEN 1 => AA[14..0].d = AI[14..0];
 		WHEN 0 => AA[14..0].d = AA_INC[14..0];
 	END CASE;
+	-- Separate load-select LCELL for the MSB is present in the reference.
 	AA15.d = (AA_LOAD15 & AI15) or (!AA_LOAD15 & AA_INC15);
--- Author alternative retained as lineage evidence, not enabled:
---	WHEN 0 => AA[].d = AA[] + (B"00000000000000",ACC_DIR6,!ACC_DIR6);
 
 	AO[] = (AA[15..0]);
 
