@@ -20,7 +20,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_212
+SUBDESIGN BASE_213
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -86,7 +86,7 @@ VARIABLE
 	ACC			: ACCELER;
 	AY3			: AY;
 
-	CBL			: lpm_ram_dp WITH (lpm_width=8,lpm_widthad=8);
+	CBL			: lpm_ram_dp WITH (lpm_width=16,lpm_widthad=8);
 
 	CT[5..0]	: NODE;
 	CTH[5..0]	: NODE;
@@ -187,15 +187,23 @@ VARIABLE
 	AUDIO_CH	: NODE;
 
 	CBL_MODE		: NODE;
+	CBL_STEREO		: NODE;
+	CBL_MODE16		: NODE;
+	CBL_INT_ENA		: NODE;
+	CBL_INT			: NODE;
 	CBL_WR			: NODE;
-	CBL_XX7			: DFFE;	-- control port 89 D7: mode/enable gate
-	CBL_XX0			: DFFE;	-- control port 89 D0: rate/seq select
-	CBL_CNT[7..0]	: DFF;	-- CBL read pointer (8-bit counter)
-	CBL_CTX[3..0]	: DFF;	-- rate sequencer: next-state reload table
-	CBL_SEQ[2..0]	: DFF;	-- stereo/sample sequencer FSM
+	CBL_XX[7..0]	: DFFE;
+	CBL_CNT[7..0]	: DFF;
+	CBL_CTX[4..0]	: DFFE;
+	CBL_WA[7..0]	: DFFE;
+	CBL_WAE			: NODE;
 	CBL_IND			: NODE;
 
-	CBL_TAB[3..0]	: LCELL;
+	CBL_TAB[4..0]	: LCELL;
+
+	CBL_R[15..0]	: DFFE;
+	CBD[7..0]		: DFFE;
+
 
 	AUDIO_R[15..0]	: DFFE;
 
@@ -586,7 +594,8 @@ END GENERATE;
 --	INT_X		= !DFF(GND,SVIDEO.INTT,,((/IO or /M1) & DFF(!INT_X,CTH3,,)));
 
 --	INT_X		= !DFF(GND,(SVIDEO.INTT & KEYS.int),,((/IO or /M1) & DFF(!INT_X,CTH3,,)));
-	INT_X		= !DFF(GND,(SVIDEO.INTT & KEYS.int),,((/IO or /M1) & DFF(DFF(!INT_X,CTH2,,),CTH2,,)));
+	INT_X		= !DFF(GND,(SVIDEO.INTT & KEYS.int),,((/IO or /M1) & DFF(DFF(!INT_X,CTH2,,),CTH2,,)))
+					or !CBL_INT;
 
 	TAPE_OUT	= LCELL(BORDER3);
 
@@ -624,6 +633,7 @@ END GENERATE;
 	XA0			= TRI(KBD_CX,WR_TM9);
 	XA1			= TRI(KBD_DX,WR_TM9);
 	XA2			= TRI(TAPE_OUT,WR_TM9);
+-- XA3 is read-only; the author output was permanently high impedance.
 
 	KBD_DD		= DFFE(XA1,T_RDXA,,,!SXA);
 	KBD_CC		= DFFE(XA0,T_RDXA,,,!SXA);
@@ -907,77 +917,100 @@ END GENERATE;
 
 --	====== COVOX ==========
 
---	== CBL/COVOX 8-bit variant (R75-observed for BASE_212 family) ==
---	Control register at port 89 has only 2 bits: D7 (mode gate) and D0 (rate select).
---	Write address = inverted A[15..8] gated by mode; no write counter (CBL_WA absent).
---	Read side: 8-bit counter + 3-bit sequencer FSM + 4-bit rate sequencer.
-
 	CBL_MODE		= CBL_XX7;
+	CBL_STEREO		= CBL_XX6;
+	CBL_MODE16		= CBL_XX5;
+	CBL_INT_ENA		= CBL_XX4;
 
-	CBL_XX7.clk		= /IOWR;
-	CBL_XX0.clk		= /IOWR;
-	CBL_XX7.ena		= DFF((DCPP[] == B"10001001"),CLK42,,);	-- 89
-	CBL_XX0.ena		= DFF((DCPP[] == B"10001001"),CLK42,,);
-	CBL_XX7.d		= D7;
-	CBL_XX0.d		= D0;
+	CBL_INT			= DFF(GND,!CBL_CNT6,,(CBL_INT_ENA & (/IO or /M1)));
+
+	CBL_XX[].clk	= /IOWR;
+	CBL_XX[].ena	= DFF((DCPP[] == B"10001001"),CLK42,,);	-- 89
+	CBL_XX[]		= D[];
 
 	CBL_CTX[].clk	= !CTH1;
-	CBL_CNT[].clk	= !CTH2;
-	CBL_SEQ[].clk	= !CTH2;
+	CBL_CNT[].clk	= !CTH1;
 
---	rate sequencer: next-state = table[current state] (values from R75 netlist)
-	CASE CBL_CTX[] IS
-		WHEN 0 => CBL_TAB[] = 2;
-		WHEN 1 => CBL_TAB[] = 1;
-		WHEN 2 => CBL_TAB[] = 3;
-		WHEN 3 => CBL_TAB[] = 8;
-		WHEN 4 => CBL_TAB[] = 10;
-		WHEN 5 => CBL_TAB[] = 9;
-		WHEN 6 => CBL_TAB[] = 11;
-		WHEN 7 => CBL_TAB[] = 4;
-		WHEN 8 => CBL_TAB[] = 6;
-		WHEN 9 => CBL_TAB[] = 5;
-		WHEN 10=> CBL_TAB[] = 7;
-		WHEN 11=> CBL_TAB[] = 12;
-		WHEN 12=> CBL_TAB[] = 0;
-		WHEN 13=> CBL_TAB[] = 13;
-		WHEN 14=> CBL_TAB[] = 15;
-		WHEN 15=> CBL_TAB[] = 0;
+	CASE CBL_XX[3..0] IS
+		WHEN 0 => CBL_TAB[] = 13; -- 16khz  -- mono/stereo
+		WHEN 1 => CBL_TAB[] = 9;  -- 22khz  -- mono/stereo
+		WHEN 2 => CBL_TAB[] = 0;  -- reserved
+		WHEN 3 => CBL_TAB[] = 0;  -- reserved
+		WHEN 4 => CBL_TAB[] = 0;  -- reserved
+		WHEN 5 => CBL_TAB[] = 0;  -- reserved
+		WHEN 6 => CBL_TAB[] = 0;  -- reserved
+		WHEN 7 => CBL_TAB[] = 0;  -- reserved
+
+		WHEN 8 => CBL_TAB[] = 27; -- 7.8125  KHz -- mono/stereo 8/16 bit
+		WHEN 9 => CBL_TAB[] = 19; -- 10.9375 KHz -- mono/stereo 8/16 bit
+		WHEN 10=> CBL_TAB[] = 13; -- 15.625  KHz -- mono/stereo 8/16 bit
+		WHEN 11=> CBL_TAB[] = 9;  -- 21.875  KHz -- mono/stereo 8/16 bit
+		WHEN 12=> CBL_TAB[] = 6;  -- 31.25   KHz -- mono/stereo 8/16 bit
+		WHEN 13=> CBL_TAB[] = 4;  -- 43.75   KHz -- mono/stereo 8/16 bit
+		WHEN 14=> CBL_TAB[] = 3;  -- 54.6875 KHz -- mono/stereo 8/16 bit
+		WHEN 15=> CBL_TAB[] = 1;  -- 109.375 KHz -- mono/stereo 8/16 bit
+--		WHEN 15=> CBL_TAB[] = 0;  -- (218.75)KHz -- stereo 110 only
 	END CASE;
 
-	CBL_CTX[].d		= CBL_TAB[];
-	CBL_CTX[].clrn	= CBL_MODE;
-
---	stereo/sample sequencer FSM (transitions from R75 netlist)
-	CBL_SEQ0.d		= (CBL_SEQ0 & CBL_SEQ1) or (!CBL_SEQ0 & !CBL_SEQ2 & !CBL_SEQ1) or (CBL_SEQ0 & CBL_SEQ2);
-	CBL_SEQ1.d		= (!CBL_SEQ1 & !CBL_XX0 & !CBL_SEQ2) or (!CBL_SEQ1 & !CBL_SEQ2 & CBL_SEQ0) or (CBL_SEQ1 & CBL_SEQ2);
-	CBL_SEQ2.d		= !CBL_SEQ2 & (CBL_SEQ1 or CBL_SEQ0);
-
---	read counter advances once per sequencer cycle (state 000)
-	IF (CBL_SEQ[] == 0) THEN
-		CBL_CNT[].d	= CBL_CNT[] + 1;
+	IF (CBL_CTX[] == 0) THEN
+		CBL_CTX[].d	= CBL_TAB[];
 	ELSE
-		CBL_CNT[].d	= CBL_CNT[];
+		CBL_CTX[].d	= CBL_CTX[] - 1;
 	END IF;
+
+	CASE (CBL_STEREO,LCELL(CBL_CTX[] == 0)) IS
+		WHEN 0,2 => CBL_CNT[].d	= CBL_CNT[];
+		WHEN 1 => CBL_CNT[].d	= CBL_CNT[]+1;
+		WHEN 3 => CBL_CNT[].d	= CBL_CNT[]+2;
+	END CASE;
 
 	CBL_CNT[].clrn	= CBL_MODE;
 
-	CBL_IND			= CBL_CNT7;
+	CBL_IND			= CBL_CNT7 xor CBL_WA7;
 
-	CBL_WR			= DFF((DCPP[] == B"10001000"),CLK42,,) & !/IOWR; -- 88
+--	CBL_WR			= DFF((DCPP[] == B"10001000"),CLK42,,) & !/IOWR; -- 88
 
-	CBL.wren 		= CBL_WR;
+	CBL_WR	= (DFF((DCPP[] == B"10001000"),CLK42,,) & !/IOWR) or
+		  (DFF((DECODE.PAGE[7..0] == B"11111101"),CLK42,(CBL_INT_ENA & ACC.ACC_DIR1),) &
+	  		!DFF((DECODE.MC_WRITE or DECODE.CAS),CLK42,,/RESET));
 
-	CBL.data[] 		= D[7..0];
 
-	CBL.wraddress[] = (!A[15..8]) & CBL_MODE;
+	CBL_WAE			= CBL_MODE16 & DFF(!CBL_WAE,!CBL_WR,,);
+
+	CBL_WA[].clk	= !CBL_WR;
+	CBL_WA[].ena	= !CBL_WAE;
+
+	CBL_WA[].clrn	= CBL_MODE & CBL_INT_ENA;
+
+	CBL_WA[].d		= CBL_WA[] + 1;
+
+	CBD[].clk		= !CBL_WR;
+	CBD[].ena		= CBL_WAE;
+--	CBD[].d			= D[];
+	CBD[].d			= ACC.MDO[7..0];
+	CBD[].clrn		= CBL_MODE16;
+
+	CBL.wren 		= (CBL_WR & !CBL_WAE);
+
+--	CBL.data[] 		= ((D7 xor CBL_MODE16),D[6..0],CBD[]);
+	CBL.data[] 		= ((ACC.MDO15 xor CBL_MODE16),ACC.MDO[14..8],CBD[]);
+
+	CBL.wraddress[] = ((!A[15..8]) & !CBL_INT_ENA) xor CBL_WA[];
 
 	CBL.wrclock		= CLK42;
 	CBL.wrclken		= VCC;
 	CBL.rden		= VCC;
-	CBL.rdaddress[] = CBL_CNT[7..0];
+	CBL.rdaddress[] = (CBL_CNT[7..1],LCELL((CBL_CNT0 & !CBL_STEREO) or (AUDIO_CH & CBL_STEREO)));
 	CBL.rdclock		= CLK42;
 	CBL.rdclken		= VCC;
+
+	CBL_R[].ena = DFF((CBL_MODE or (CBL_WR)),CLK42,,);
+
+	CBL_R[].CLK	= CLK42;
+	CASE CBL_MODE IS
+		WHEN 0 => CBL_R[] = (D[7..0],B"00000000");
+		WHEN 1 => CBL_R[] = CBL.q[];
+	END CASE;
 
 --	====== AY-3-8910 ========
 
@@ -1014,7 +1047,7 @@ END GENERATE;
 --	AY_CHS[].d		= (((GND,AY_FULL[]) + (VCC,CBL.q[15..5])),B"0000");
 
 --	AY_CHS[].d		= (((GND,AY_FULL[]) + (VCC,CBL.q[15..8],B"000")),B"0000");
-	AY_CHS[].d		= (((GND,AY_FULL[]) + (VCC,CBL.q[7..0],B"000")),B"0000");
+	AY_CHS[].d		= (((GND,AY_FULL[]) + (VCC,CBL_R[15..5])),CBL_R[4..1]);
 
 --	===== MOUSE =========================
 
