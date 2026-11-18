@@ -104,6 +104,9 @@ VARIABLE
 	INTTX		: NODE;
 
 	VLA[17..0]	: DFF;
+	VLA_NEXT[17..0]	: NODE;
+	VLA_MUX[10..0]	: LCELL;
+	VLA_HOLD[10..0]	: LCELL;
 --	SVA[17..0]	: NODE;
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
@@ -268,6 +271,7 @@ BEGIN
 	CTH[5].prn		= !COPY_SINC_H;
 
 	-- set CTV to 122h
+	CTV[0].clrn		= !COPY_SINC_V;
 	CTV[1].prn		= !COPY_SINC_V;
 	CTV[3..2].clrn	= !COPY_SINC_V;
 
@@ -406,7 +410,7 @@ IF MODE == "SPRINTER" GENERATE
 
 	CASE VCM[1..0] IS
 		WHEN 0 =>
-			VLA[].d	= (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
+			VLA_NEXT[]	= (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
@@ -421,19 +425,19 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN 1 =>
 			WR_PIC.d	= !VCM2;
 			WR_COL.d	= VCM2;
-			VLA[].d		= SVA[];
+			VLA_NEXT[]		= SVA[];
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
 		WHEN 2 =>
-			VLA[].d		= VXA[17..0];
+			VLA_NEXT[]		= VXA[17..0];
 			V_CST[].d 	= (!VXA18,VXA18) or MXWE;
 			V_WE.d		= MXWE;
 			V_WEX.d		= GND;
 			V_WET[].d	= MXWE or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
 		WHEN 3 =>
 			WR_PIC.d	= X_MODE5;
-			VLA[].d		= (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
+			VLA_NEXT[]		= (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
 			WR_MODE.d	= !(CT[5..3] == B"111") & !(CT4 & CT3 & !MODE0[5]);
 			V_CST[].d 	= (VCC,GND);
 			V_WE.d		= VCC;
@@ -552,6 +556,13 @@ IF MODE == "SPRINTER" GENERATE
 	X_MODE6	= DFF(MODE0[6],LWR_COL,,);
 	X_MODE5	= DFF(MODE0[5],LWR_COL,,);
 	X_MODE4 = DFF(MODE0[4],LWR_COL,,);
+
+	-- Measured native mux cell and separate unity cell on VAO[15..8,2..0].
+	VLA_MUX[] = (VLA_NEXT[17..10],VLA_NEXT[4..2]);
+	VLA_HOLD[] = VLA_MUX[];
+	(VLA[17..10].d,VLA[4..2].d) = VLA_HOLD[];
+	VLA[9..5].d = VLA_NEXT[9..5];
+	VLA[1..0].d = VLA_NEXT[1..0];
 
 	VAO[]	= VLA[17..2];
 

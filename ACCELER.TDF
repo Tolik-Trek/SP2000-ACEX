@@ -78,6 +78,10 @@ VARIABLE
 	RETN		: DFFE;
 
 	AA[15..0]	: DFFE;
+	AA_INC[15..0]	: NODE;
+	AGR_INC[7..0]	: NODE;
+	AA_LOAD		: NODE;
+	AA_LOAD15	: NODE;
 
 	RGACC[7..0]	: DFFE;
 	AGR[7..0]	: DFFE;
@@ -192,12 +196,18 @@ BEGIN
 
 --  == accelerator grafic line ==
 
+	-- Один инкрементатор каждого существующего банка, как в R75 unit-counter.
+	AA_INC[] = AA[] + 1;
+	AGR_INC[] = AGR[] + 1;
+	AA_LOAD = DFF(START_ACC,CLK42,,);
+	AA_LOAD15 = AA_LOAD; -- тот же сигнал загрузки; отдельного буфера в R75 нет
+
 	AGR[].clk	= CLK42;
 	AGR[].ena	= !DFF((/IOM or /WR or !DFF((DCP[] == B"1100X100"),CLK42,,)),CLK42,,) or
 					!(!ACC_DIR4 or ACC_GO or !ACC_GO_1);
 
 	CASE DFF(START_ACC,CLK42,,) IS
-		WHEN 0 => AGR[].d = AGR[] + 1;
+		WHEN 0 => AGR[].d = AGR_INC[];
 		WHEN 1 => AGR[].d = DI[];
 	END CASE;
 
@@ -362,11 +372,13 @@ BEGIN
 --	AA[].ena	= START_ACC or (ACC_DIR5 & !ACC_GO & ACC_GO_1);
 	AA[].ena	= LCELL(START_ACC or (ACC_DIR5 & !(CAS or START_ACC) & (ACC_GO or (ACC_GO_1 & ACC_DIR6))));
 
-	CASE DFF(START_ACC,CLK42,,) IS
-		WHEN 1 => AA[].d = AI[];
---		WHEN 0 => AA[].d = AA[] + (B"00000000000000",ACC_DIR6,!ACC_DIR6);
-		WHEN 0 => AA[].d = AA[] + 1;
+	CASE AA_LOAD IS
+		WHEN 1 => AA[14..0].d = AI[14..0];
+		WHEN 0 => AA[14..0].d = AA_INC[14..0];
 	END CASE;
+	AA15.d = (AA_LOAD15 & AI15) or (!AA_LOAD15 & AA_INC15);
+-- Author alternative retained as lineage evidence, not enabled:
+--	WHEN 0 => AA[].d = AA[] + (B"00000000000000",ACC_DIR6,!ACC_DIR6);
 
 	AO[] = (AA[15..0]);
 
