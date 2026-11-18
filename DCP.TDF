@@ -506,8 +506,8 @@ CAS		\__/  | \__/|\__/
 --	RFT.prn		= VCC;
 
 	RFC.clk		= CLK42;
-	RFC.d		= !MC_RQ or RFT;
---	RFC.d		= !MC_RQ;
+--	RFC.d		= !MC_RQ or RFT; -- timer alternative; b6af has no live RFT state
+	RFC.d		= !MC_RQ; -- surviving author alternative, actual11native fields proved
 	RFC.ena		= CT1 & CT2;
 
 	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE))) & (!MC_TYPE or !RFC);
