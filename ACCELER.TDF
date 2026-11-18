@@ -59,11 +59,9 @@ SUBDESIGN acceler
 	)
 VARIABLE
 
-	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);	-- R75: буфер акселератора 8-битный (rev esb3)
+	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=16,LPM_WIDTHAD=8);
 
 	DO[7..0]	: DFFE;
---	READ_CAPTURE_ENABLE : NODE; -- BASE203 enable-clock alternative
-	READ_CAPTURE_CLOCK : DFF;
 	MDO[15..0]	: DFFE;
 
 	PRF_CMD		: DFFE;
@@ -120,8 +118,7 @@ VARIABLE
 
 	MDOX[7..0]	: DFF;
 	MDOY[7..0]	: DFF;
-
-	GLISS_BYTE_FF[1..0] : DFF;
+	GLISS_BYTE_FF0, GLISS_BYTE_FF1 : DFF;
 
 	ACC_TIME	: NODE;
 
@@ -274,34 +271,15 @@ BEGIN
 
 --  == accelerator datas ==
 
-	-- Ранний авторский GLISSER из комментариев: сравниваются уже MDO-регистры.
-	-- Два comparator FF независимы; существующий byte-select выбирает их Q.
-	GLISS_BYTE_FF[].clk = CLK42;
-	GLISS_BYTE_FF0.d = (MDO[7..0] == H"FF");
-	GLISS_BYTE_FF1.d = (MDO[15..8] == H"FF");
+	-- Ранний авторский GLISSER: два захвата MDO, затем выбор байта.
+	GLISS_BYTE_FF0.clk = CLK42; GLISS_BYTE_FF0.d = (MDO[7..0] == H"FF");
+	GLISS_BYTE_FF1.clk = CLK42; GLISS_BYTE_FF1.d = (MDO[15..8] == H"FF");
 	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
 		WHEN 0 => MD[] = MDI[7..0]; GLISSER = GLISS_BYTE_FF0;
 		WHEN 1 => MD[] = MDI[15..8]; GLISSER = GLISS_BYTE_FF1;
 	END CASE;
 
-% Поздняя альтернатива донора (единый GLISS_R FF после входного mux):
-	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
-		WHEN 0 => MD[] = MDI[7..0];
---				  GLISSER = DFF((MDO[7..0] == H"FF"),CLK42,,);
-		WHEN 1 => MD[] = MDI[15..8];
---				  GLISSER = DFF((MDO[15..8] == H"FF"),CLK42,,);
-	END CASE;
-
-	GLISS_R.clk	= CLK42;
-	CASE ACC_DIR1 IS
-		WHEN 0 => GLISS_R = LCELL(DI[] == H"FF");
-		WHEN 1 => GLISS_R = LCELL(RAM.q[7..4] == H"F") & LCELL(RAM.q[3..0] == H"F");
-	END CASE;
-	GLISSER	= GLISS_R;
-
-%
-
-	MDO[].clk	= !CLK42;
+	MDO[].clk	= !CLK42;	-- R76: rev lc_A27_1-ena bank (16 FF) clk = GLOBAL(!p183) = negedge
 --	MDO[].clk	= CLK42;
 
 	MDO[].ena	= CAS;
@@ -324,14 +302,10 @@ BEGIN
 		WHEN 1 => MDO[].d = (RAM.q[7..0],RAM.q[7..0]);
 	END CASE;
 
---	Поздняя альтернатива: DO[].clk = DFF(MC_END,!CLK42,,), ena=VCC.
-	-- BASE203: отдельный captured read enable; источник C22_3 не DCP A26_1.
-	-- BASE204 negative-edge completion stage drives the DO bank clock directly.
-	READ_CAPTURE_CLOCK.clk = !CLK42;
-	READ_CAPTURE_CLOCK.d = MC_END;
---	READ_CAPTURE_ENABLE = !READ_CAPTURE_CLOCK; -- BASE203 alternative, not used in BASE204
-	DO[].clk = READ_CAPTURE_CLOCK; -- actual derived clock, author DFF(MC_END,!CLK42)
-	DO[].ena = VCC;
+	DO[].clk		= DFF(MC_END,!CLK42,,);
+--	DO[].clk		= !CLK42;
+	DO[].ena		= VCC;
+--	DO[].ena		= DFF(!MC_END,CLK42,,);
 	DO[].d			= MD[];
 
 --	== accelerator functions ==
@@ -366,7 +340,7 @@ BEGIN
 	RAM_WR			= DFF((!/RD & !ACC_GO & CT0),CLK42,,);
 
 	RAM.wren 		= RAM_WR;
-	RAM.data[] 		= XMD[];	-- R75: w8, дублирование старшей половины отсутствует
+	RAM.data[] 		= (XMD[],XMD[]);
 --	RAM.wraddress[] = ACC_CNT[];
 	RAM.wraddress[] = RAM_ADR[];
 	RAM.wrclock		= CLK42;
