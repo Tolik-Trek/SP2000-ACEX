@@ -135,6 +135,7 @@ VARIABLE
 --	DOS_ON_		: NODE;
 
 	MC_RQ		: NODE;
+	BLOCK_READ_STAGE3 : DFF; -- Third memory-request history sample; BASE_210 reverse.
 	MC_END		: DFFE;
 	MC_BEGIN	: DFFE;
 	MC_TYPE		: DFFE;
@@ -143,11 +144,6 @@ VARIABLE
 	CAS			: DFFE;
 
 	MA_[11..0]	: DFFE;
-	MA_P0,MA_P1,MA_P2,MA_P3,MA_P4,MA_P6,MA_P8,MA_P9	: LCELL;	% позитивные каскад-концы MA %
-	X_ADR[11..0] : LCELL;
-	MA_NEXT[11..0] : NODE;
-	MA_MEMORY_PHASE : LCELL; -- existing raw memory-phase distribution, !MA_CT1
-
 	MCA[1..0]	: DFFE;
 
 	/IOM		: DFFE;
@@ -162,7 +158,6 @@ VARIABLE
 	/MR_WAIT	: NODE;
 
 	MEM_RW		: NODE;
-	MEM_END_HISTORY : DFF;
 	IO_RW		: NODE;
 	IO_RWM		: NODE;
 
@@ -200,10 +195,10 @@ VARIABLE
 
 	DCP_RES		: NODE;
 
-	HDF[2..0]	: DFF;	% HDD-строб-декоды (rev lc_C28_1/lc_F15_5/lc_F30_6) %
+	HDD_A[3..0]	: DFF;
 
-	IO_STB		: NODE;	% one-shot /IO-строб (rev lc_F8_7: DFF(p24,!p78,!q|!p78)) %
-
+	X_ADR[11..0]: LCELL;
+	X_MA_[11..0]: LCELL;
 
 	WR_AWGX		: NODE;
 
@@ -258,7 +253,7 @@ BEGIN
 --	==============================================================
 
 --	TURBO	= DFFE((TB_SW & TURBO_HAND),CLK42,,/RESET,CLK_Z80);
-	TURBO = DFF(DFFE((!TB_SW & TURBO_HAND),CLK_Z80,,/RESET,!/RF),CLK42,,); -- actual original turbo qualifier polarity
+	TURBO	= DFF(DFFE((TB_SW & TURBO_HAND),CLK_Z80,,/RESET,!/RF),CLK42,,);
 
 	CLK84	= CLK42 xor LCELL(CLK42X);
 	CLK42X	= DFF(!CLK42X,CLK84,,);
@@ -272,7 +267,7 @@ BEGIN
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
-	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
+	CLK_Z80	= DFF((!CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
 --	==============================================================
 	CLK21	= DFF((!CT0 xor CT2),CLK42,,);
@@ -297,7 +292,7 @@ BEGIN
 	WR_AWGX		= DFF(GND,!WR_TM9,,DFF(WR_AWGX,CLK42,,));
 
 --	WR_TM9	= (!MA_CT1 or (!IO_RW & !PORTS_X));
-	WR_TM9 = !MA_CT1 or (IO_STB & !PORTS_X);
+	WR_TM9	= (!MA_CT1 or (!/IO & !PORTS_X));
 
 	WR_AWG		= WR_AWGX;
 
@@ -329,7 +324,7 @@ BEGIN
 							10 - HDD1/2
 							11 - CMOS
 				bit8 - HDD CS1/CS3 or CMOS data/adr
-				bit9,10,11 - HDD-адрес (ранняя форма: HDF[2..0]-декод)
+				bit9,10,11 - HDD_A[2..0]
 %
 	CASE A[15..14] IS
 		WHEN 0 => SP_SCR = GND;		SP_SA = GND;
@@ -344,62 +339,61 @@ BEGIN
 		WHEN 1 => GA[] = (VCC,G_LINE[8..0]);
 	END CASE;
 
---	===========  MA-мукс: каскадная POS-форма (реверс c303 R75) ===========
---	Селекты: MA_CT0 (rev lc_F34_5), MA_CT1 (lc_F34_7), IO_STB (lc_F8_7),
---	GA-слой = GRAF (lc_C19_4). Побитовые .d: !(LEFT & CASCADE(RIGHT)).
-
-	IO_STB		= DFF(/M1,!/IO,LCELL(!IO_STB or !/IO),);	% one-shot /IO-строб %
-
---	HDD-строб декоды (rev lc_C28_1=HDF0, lc_F15_5=HDF1, lc_F30_6=HDF2)
-	HDF[].clk	= CLK42;
-	HDF0.d		= (!A14 & A0 & !A1) or (A2 & A0 & !A1) or (!A2 & A0 & A1);
-	HDF1.d		= (A14 & !A1 & A2) or (A1 & !A2);
-	HDF2.d		= (A14 & A1 & !A2) or (!A1 & A2);
-
-	-- Surviving author graphic/CPU/IO address word mux; early bit10 remains live.
-	CASE (!IO_STB,MA_CT0) IS
-		WHEN 0 => X_ADR[] = (GND,CNF4,PN5,DOS,/WR,A15,A14,A[6..5],A13,A7,A2);
+	CASE (IO_RW,MA_CT0) IS
+		WHEN 0 => X_ADR[] = (GND,CNF4,PN5,DOS,/WR,A15,A14,A[6..5],A13,A7,A[2]);
 		WHEN 1 => X_ADR[] = (GND,GND,CNF[4..3],B"01000000");
 		WHEN 2 => X_ADR[] = (GND,GA3,GA[1..0],A[9..2]);
 		WHEN 3 => X_ADR[] = (GND,GND,GA[3..2],MEM.q[7..4],GA[7..4]);
 	END CASE;
-	MA_MEMORY_PHASE = !MA_CT1;
-	CASE !MA_MEMORY_PHASE IS
-		WHEN 0 => MA_NEXT[] = (GND,X_ADR[10..0]);
-		WHEN 1 =>
-			MA_NEXT[11..9] = HDF[2..0];
-			MA_NEXT[8..6] = MEM.q[8..6] & IO_STB;
-			MA_NEXT5 = MEM.q5 & !/IOMZ & IO_STB;
-			MA_NEXT4 = MEM.q4 & !/IOMY & IO_STB;
-			MA_NEXT3 = /WR;
-			MA_NEXT2 = !IO_STB or MEM.q2;
-			MA_NEXT[1..0] = A[6..5];
+
+	CASE IO_RW IS
+		WHEN 0 => X_MA_[] = (HDD_A[2..0],MEM.q[8..6],((MEM.q[5..4]) & (!/IOMZ,!/IOMY)),/WR,MEM.q2,A[6..5]);
+		WHEN 1 => X_MA_[] = (HDD_A[2..0],B"00000",/WR,VCC,A[6..5]);
 	END CASE;
-	MA_P0 = MA_NEXT[0];
-	MA_[0].d = MA_P0;
-	MA_P1 = MA_NEXT[1];
-	MA_[1].d = MA_P1;
-	MA_P2 = MA_NEXT[2];
-	MA_[2].d = MA_P2;
-	MA_P3 = MA_NEXT[3];
-	MA_[3].d = MA_P3;
-	MA_P4 = MA_NEXT[4];
-	MA_[4].d = MA_P4;
-	MA_[5].d = MA_NEXT[5];
-	MA_P6 = MA_NEXT[6];
-	MA_[6].d = MA_P6;
-	MA_[7].d = MA_NEXT[7];
-	MA_P8 = MA_NEXT[8];
-	MA_[8].d = MA_P8;
-	MA_P9 = MA_NEXT[9];
-	MA_[9].d = MA_P9;
-	MA_[10].d = MA_NEXT[10];
-	MA_[11].d = MA_NEXT[11];
-	MA[] = MA_[];
+%
+	CASE MA_CT1 IS
+--		WHEN 0 => MA_[] = X_ADR[];
+		WHEN 0 => MA_[] = (GND,X_ADR[10..0]);
+		WHEN 1 => MA_[] = (HDD_A[2..0],X_MA_[8..4],/WR,X_MA_[3],A[6..5]);
+	END CASE;
+%
+
+	CASE (IO_RW,MA_CT1) IS
+		WHEN B"00" =>
+			MA_[] 	= (X_ADR[11..0]);
+		WHEN B"01" =>
+			MA_[] 	= (HDD_A[2..0],MEM.q[8..6],((MEM.q[5..4]) & (!/IOMZ,!/IOMY)),/WR,MEM.q2,A[6..5]);
+		WHEN B"10" =>
+			MA_[] 	= (X_ADR[11..0]);
+		WHEN B"11" =>
+			MA_[] 	= (HDD_A[2..0],B"00000",/WR,VCC,A[6..5]);
+	END CASE;
+
+	MA[]	= MA_[];
 
 	MCA[].ena	= CT2 & CT1;
 	MCA[].clk	= CLK42;
 	MCA[]		= A[1..0];	-- adress for CAS
+
+	HDD_A[].clk	= CLK42;
+	CASE (A[14],A[2..0]) IS
+		WHEN 0 => HDD_A[] = 0;
+		WHEN 1 => HDD_A[] = 1;
+		WHEN 2 => HDD_A[] = 2;
+		WHEN 3 => HDD_A[] = 3;
+		WHEN 4 => HDD_A[] = 4;
+		WHEN 5 => HDD_A[] = 5;
+		WHEN 6 => HDD_A[] = 0;
+		WHEN 7 => HDD_A[] = 0;
+		WHEN 8 => HDD_A[] = 0;
+		WHEN 9 => HDD_A[] = 0;
+		WHEN 10 => HDD_A[] = 6;
+		WHEN 11 => HDD_A[] = 7;
+		WHEN 12 => HDD_A[] = 14;
+		WHEN 13 => HDD_A[] = 15;
+		WHEN 14 => HDD_A[] = 0;
+		WHEN 15 => HDD_A[] = 0;
+	END CASE;
 
 
 --	=== Memory Sinchronizer ======================================
@@ -434,7 +428,7 @@ CAS		\__/  | \__/|\__/
 
 --	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);
 
-	MC_RQ = DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);
+	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),!CLK42,,);
 
 	MC_BEGIN.clk= CLK42;
 	MC_BEGIN.ena= CT1 & CT2;
@@ -479,21 +473,20 @@ CAS		\__/  | \__/|\__/
 --	CAS.prn		= !BLK_C;
 
 --	/MR_WAIT	= (MEM_RW or /CASH or DFF(MC_END,CLK42,!/MR,)) or (!TURBO & !ACC_ON);
-	MEM_END_HISTORY.d = MC_END; MEM_END_HISTORY.clk = CLK42; MEM_END_HISTORY.clrn = !/MR;
-	/MR_WAIT = MEM_END_HISTORY or LCELL(MEM_RW or /CASH or (!TURBO & !ACC_ON));
+	/MR_WAIT	= MC_END or LCELL(MEM_RW or /CASH or (!TURBO & !ACC_ON));
 
 --	MEM_RW		= LCELL(/MR or !/RF);
 
 	-- anti gluk!
-	MEM_RW = /MR or !/RF;
-	IO_RWM = !IO_STB; -- existing original M1 one-shot bank
+	MEM_RW		= DFF(!/RF,!/MR,,LCELL(MEM_RW or !/MR));
+	IO_RWM		= DFF(!/M1,!/IO,,LCELL(IO_RW or !/IO));
 
 	IO_RW		= DFF(/IO,CLK42,,/M1);
 
 	/IOMM.clk	= CLK42;
 --	/IOMM.ena	= CT0 xor CT2;
 	/IOMM.ena	= CLK21;
-	/IOMM.d = !IO_STB or !MC_END or DFF((WT_CT[] == 0),CLK42,,);
+	/IOMM.d		= IO_RW or !MC_END or DFF((WT_CT[] == 0),CLK42,,);
 	/IOMM.prn	= /RES;
 
 	/IOMX.clk	= CLK42;
@@ -572,9 +565,13 @@ CAS		\__/  | \__/|\__/
 
 --	when BLK_R = 1 => Other Devices stay Active!
 
+	BLOCK_READ_STAGE3.d = DFF(DFF(MC_RQ,CLK42,,!/MR),CLK42,,!/MR);
+	BLOCK_READ_STAGE3.clk = CLK42;
+	BLOCK_READ_STAGE3.clrn = VCC;
+	BLOCK_READ_STAGE3.prn = !/MR;
 	BLK_R = DFF(  (LCELL((MEM.q7 & MEM.q6 & RAM) or
 				   (MEM.q7 & LCELL(A14 & A15 & SC4))) &
-				   !DFF(DFF(MC_RQ,CLK42,,!/MR),CLK42,,!/MR)),!CLK42,!/MR,);
+				   !BLOCK_READ_STAGE3.q),!CLK42,!/MR,);
 
 	/CASH = DFF((MEM.q[7..4] == 15),!CLK42,BLK_R,);
 --	/CASH = VCC;
@@ -625,18 +622,9 @@ CAS		\__/  | \__/|\__/
 --	/IOWR		= DFF((/WR or /IO),CLK42,,!/IO);
 	/IOWR		= LCELL(/IO or /WR or !/M1);
 
--- === Побитовый (серийный) протокол записи конфига — ранняя форма c303 ===
--- rev-домен lc_F35_3 = LCELL(!/M1 | /IO | /WR) == /IOWR; ena — регистровые
--- декоды портов XXXXX000 (SC), XXXXX001 (PN), XXXXX110 (SYS-группа).
--- Поля пишутся по маске из самой шины D:
---   CNF[7..3] := D[7..3] при D2, иначе удержание   (lc_F22_2/3, lc_F30_2/7, lc_F32_2)
---   AROM16    := D0 при !D1, иначе удержание       (lc_F32_1)
---   TB_SW     := !D0 при D1, иначе удержание       (lc_F32_5; запись инвертирована!)
---   SYS       := !A6 (rev: !aa_c22[6] — тот же A6 на момент записи)   (lc_F22_5)
-
     CNF[].ena 	= SYS_ENA; CNF[].d  = (DI[] & DI2) or (CNF[] & !DI2);
 	AROM16.ena 	= SYS_ENA; AROM16.d = (DI0 & !DI1) or (AROM16 & DI1);
-	TB_SW.ena 	= SYS_ENA; TB_SW.d  = (!DI0 & DI1) or (TB_SW & !DI1);
+	TB_SW.ena 	= SYS_ENA; TB_SW.d  = (DI0 &  DI1) or (TB_SW & !DI1);
 	SYS.ena 	= SYS_ENA; SYS.d    = !A6;
 
 	SC[].ena 	= DFF((DCP_CX & (DCPP[] == B"XXXXX000")),CLK42,,)	;SC[].d   = DI[];
@@ -650,15 +638,14 @@ CAS		\__/  | \__/|\__/
 	CNF[].clk	= /IOWR;
 
 	AROM16.clrn		= /RESET;
-	TB_SW.clrn		= /RESET;		-- rev lc_F32_5: clrn=p19, не prn
+	TB_SW.prn		= /RESET;
 	SYS.clrn		= /RESET;
 	CNF[].clrn		= /RESET;
 
-	SC[].clrn		= /RESET & !CNF6;	-- Scorpion-OFF (rev lc_F32_3 = p19 & !CNF6)
+	SC[].clrn		= /RESET & !CNF6;	-- Scorpion-OFF
 
-	PN[4..0].clrn	= /RESET & !CNF5;	-- rev lc_F25_5 = p19 & !CNF5
-	PN5.clrn		= /RESET & (!CNF5 or CNF7);	-- rev lc_F30_8 = p19 & (!CNF5 | CNF7)
-	PN[7..6].clrn	= /RESET & CNF7;	-- rev lc_F22_6 = p19 & CNF7
+	PN[5..0].clrn	= /RESET & !CNF5;	-- reset PN5
+	PN[7..5].clrn	= /RESET & CNF7;	-- set Pentagon-512
 
 	PN4Q	= PN4;
 

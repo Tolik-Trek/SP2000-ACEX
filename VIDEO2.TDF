@@ -85,7 +85,6 @@ VARIABLE
 
 	CT[5..0]	: DFFE;
 	CTH[5..0]	: DFFE;
-	H_PHASE_PREFIX, V_PHASE_PREFIX : LCELL; -- separate existing raw counter-enable prefixes
 	CTV[8..0]	: DFFE;
 	CTF[6..0]	: DFF;
 
@@ -105,9 +104,6 @@ VARIABLE
 	INTTX		: NODE;
 
 	VLA[17..0]	: DFF;
-
-	VLA_NEXT[17..0] : NODE; % позитивные каскад-концы VLA %
-
 --	SVA[17..0]	: NODE;
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
@@ -215,9 +211,6 @@ BEGIN
 		V_WET[].d	= VCC;
 	END DEFAULTS;
 
-	-- Full author address word selected by the VCM CASE below.
-	VLA[].d = VLA_NEXT[];
-
 	ZX_COLOR[] = ZX_COL[];
 
 --	=== MOUSE counters ========
@@ -227,8 +220,6 @@ BEGIN
 		WHEN 0 => MS_X[] = MS_X[] + 1;
 		WHEN 1 => MS_X[] = (!MOUSE_X[9..0]);
 	END CASE;
-
-
 
 	MS_Y[].clk	= !CTH5;
 	CASE LCELL(CTV8 & !CTV5 & CTV4) IS
@@ -266,18 +257,24 @@ BEGIN
 --	CTV[].clrn = !COPY_SINC_V or VER_PLACE;
 --	CTV[].prn  = !COPY_SINC_V or !VER_PLACE;
 
-	CT[5].clrn = VCC; -- raw phase5 has no asynchronous sync reset
-	-- Raw encoded banks exhaustively decoded as reload46/280 and wrap55/319.
-	CTH[0].clrn = !COPY_SINC_H;
-	CTH[1].prn = !COPY_SINC_H;
-	CTH[2].prn = !COPY_SINC_H;
-	CTH[3].prn = !COPY_SINC_H;
-	CTH[4].clrn = !COPY_SINC_H;
-	CTH[5].prn = !COPY_SINC_H;
-	CTV[2..0].clrn = !COPY_SINC_V;
-	CTV[4..3].prn = !COPY_SINC_V;
-	CTV[7..5].clrn = !COPY_SINC_V;
-	CTV[8].prn = !COPY_SINC_V;
+	CT[5].clrn		= !COPY_SINC_H;
+
+	-- BASE_210: set CTH to 49 (31h), per all-state raw-counter proof.
+	CTH[0].prn 		= !COPY_SINC_H;
+	CTH[1].clrn 		= !COPY_SINC_H;
+	CTH[2].clrn		= !COPY_SINC_H;
+	CTH[3].clrn		= !COPY_SINC_H;
+	CTH[4].prn 		= !COPY_SINC_H;
+	CTH[5].prn		= !COPY_SINC_H;
+
+	-- set CTV to 122h
+	CTV[1].prn		= !COPY_SINC_V;
+	CTV[3..2].clrn	= !COPY_SINC_V;
+
+	CTV[4].clrn		= !COPY_SINC_V;
+	CTV[5].prn		= !COPY_SINC_V;
+	CTV[7..6].clrn	= !COPY_SINC_V;
+	CTV[8].prn		= !COPY_SINC_V;
 
 	CT[5..0].clk	= CLK42;
 	CTH[5..0].clk	= CLK42;
@@ -296,7 +293,7 @@ BEGIN
 	END CASE;
 								  -- for remove sinc jitter
 --	CT[5..3].ena	= DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,);
-	CT[5..3].ena = DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,); -- surviving author jitter alternative
+	CT[5..3].ena	= DFF(((CT0 & CT2) or (COPY_SINC_H & !CT4)),CLK42,,);
 	CT[5..3]		= CT[5..3]+1;
 %
 	CASE CT[4..3] IS
@@ -306,10 +303,8 @@ BEGIN
 		WHEN 3 => CT[5..3]	= CT[5..3]+1;
 	END CASE;
 %
-	H_PHASE_PREFIX = CT4 & CT0;
-	V_PHASE_PREFIX = CT4 & CT0;
-	CTH[].ena		= DFF((H_PHASE_PREFIX & CT5 & CT3 & CT2),CLK42,,);
-	CTV[].ena		= DFF((V_PHASE_PREFIX & CT5 & CT3 & CT2 & (CTH[] == 48)),CLK42,,);
+	CTH[].ena		= DFF(((CT[5..2] == 15) & CT0),CLK42,,);
+	CTV[].ena		= DFF(((CT[5..2] == 15) & CT0 & (CTH[] == 48)),CLK42,,);
 
 	IF CTH[] == 55 THEN
 		CTH[]	= GND;
@@ -411,7 +406,7 @@ IF MODE == "SPRINTER" GENERATE
 
 	CASE VCM[1..0] IS
 		WHEN 0 =>
-			VLA_NEXT[] = (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
+			VLA[].d	= (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
@@ -426,19 +421,19 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN 1 =>
 			WR_PIC.d	= !VCM2;
 			WR_COL.d	= VCM2;
-			VLA_NEXT[] = SVA[];
+			VLA[].d		= SVA[];
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
 		WHEN 2 =>
-			VLA_NEXT[] = VXA[17..0];
+			VLA[].d		= VXA[17..0];
 			V_CST[].d 	= (!VXA18,VXA18) or MXWE;
 			V_WE.d		= MXWE;
 			V_WEX.d		= GND;
 			V_WET[].d	= MXWE or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
 		WHEN 3 =>
 			WR_PIC.d	= X_MODE5;
-			VLA_NEXT[] = (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
+			VLA[].d		= (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
 			WR_MODE.d	= !(CT[5..3] == B"111") & !(CT4 & CT3 & !MODE0[5]);
 			V_CST[].d 	= (VCC,GND);
 			V_WE.d		= VCC;
