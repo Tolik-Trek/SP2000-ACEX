@@ -59,11 +59,10 @@ SUBDESIGN acceler
 	)
 VARIABLE
 
-	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);	-- R75: буфер акселератора 8-битный (rev esb3)
+--	R75: RAM акселератора 8-битная (rev esb4: dp8, общий адрес)
+	RAM			: LPM_RAM_DP WITH (LPM_WIDTH=8,LPM_WIDTHAD=8);
 
 	DO[7..0]	: DFFE;
---	READ_CAPTURE_ENABLE : NODE; -- BASE203 enable-clock alternative
-	READ_CAPTURE_CLOCK : DFF;
 	MDO[15..0]	: DFFE;
 
 	PRF_CMD		: DFFE;
@@ -71,6 +70,10 @@ VARIABLE
 	CB_CMD		: DFFE;
 	ID_CMD		: DFFE;
 	IN_OUT_CMD	: DFFE;
+
+	ED_PAT		: NODE;
+	RET_PAT		: NODE;
+	IOC_PAT		: NODE;
 
 	CORRECT_1F	: NODE;
 
@@ -121,7 +124,7 @@ VARIABLE
 	MDOX[7..0]	: DFF;
 	MDOY[7..0]	: DFF;
 
-	GLISS_BYTE_FF[1..0] : DFF;
+	GLISS_R		: DFF;
 
 	ACC_TIME	: NODE;
 
@@ -147,13 +150,21 @@ BEGIN
 
 --	RETI comand
 
+--	opcode decodes as two cascade halves, .d completes the pattern
+--	ED_PAT  = (DI3 & DI6 & !DI4) & CASCADE(DI2 & !DI1 & DI0)   ; rev lc_F22_4
+--	RET_PAT = (ED & DI2 & DI0 & !DI1) & CASCADE(DI6 & DI3 & !DI4) ; rev lc_F22_2
+--	IOC_PAT = (DI4 & !DI2 & DI6) & CASCADE(!PRF & DI0 & DI1)   ; rev lc_F32_2
+	ED_PAT		= LCELL((DI3 & DI6 & !DI4) & CASCADE(DI2 & !DI1 & DI0));
+	RET_PAT		= LCELL((ED_CMD & DI2 & DI0 & !DI1) & CASCADE(DI6 & DI3 & !DI4));
+	IOC_PAT		= LCELL((DI4 & !DI2 & DI6) & CASCADE(!PRF_CMD & DI0 & DI1));
+
 	ED_CMD.clk		= /MR;
 	ED_CMD.ena		= /M1M;
-	ED_CMD.d		= (DI[] == H"ED");
+	ED_CMD.d		= ED_PAT & DI7 & DI5;
 
 	RETI.clk		= /MR;
 	RETI.ena		= /M1M;
-	RETI.d			= ED_CMD & (DI[] == H"4D");
+	RETI.d			= RET_PAT & !DI7 & !DI5;
 
 --	"1" on the RETI triger is the end of interupt sycle.
 
@@ -177,7 +188,7 @@ BEGIN
 
 	IN_OUT_CMD.clk	= /MR;
 	IN_OUT_CMD.ena	= /M1M;
-	IN_OUT_CMD.d	= (DI[] == B"1101X011") & !PRF_CMD;  -- D3/DB
+	IN_OUT_CMD.d	= IOC_PAT & DI7 & !DI5;   -- D3/DB & !PRF_CMD
 	IN_OUT_CMD.clrn	= /IO;
 
 	CORRECT_1F		= LCELL(IN_OUT_CMD & (DO[] == H"1F") & !/MR & !/RD);
@@ -274,17 +285,6 @@ BEGIN
 
 --  == accelerator datas ==
 
-	-- Ранний авторский GLISSER из комментариев: сравниваются уже MDO-регистры.
-	-- Два comparator FF независимы; существующий byte-select выбирает их Q.
-	GLISS_BYTE_FF[].clk = CLK42;
-	GLISS_BYTE_FF0.d = (MDO[7..0] == H"FF");
-	GLISS_BYTE_FF1.d = (MDO[15..8] == H"FF");
-	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
-		WHEN 0 => MD[] = MDI[7..0]; GLISSER = GLISS_BYTE_FF0;
-		WHEN 1 => MD[] = MDI[15..8]; GLISSER = GLISS_BYTE_FF1;
-	END CASE;
-
-% Поздняя альтернатива донора (единый GLISS_R FF после входного mux):
 	CASE DFFE(AA0,CLK42,,,(CT2 & CT1)) IS
 		WHEN 0 => MD[] = MDI[7..0];
 --				  GLISSER = DFF((MDO[7..0] == H"FF"),CLK42,,);
@@ -294,15 +294,14 @@ BEGIN
 
 	GLISS_R.clk	= CLK42;
 	CASE ACC_DIR1 IS
-		WHEN 0 => GLISS_R = LCELL(DI[] == H"FF");
+		-- D==FF decode as 3-cell cascade (rev lc_D21_3 form)
+		WHEN 0 => GLISS_R = LCELL((DI5 & DI7) & CASCADE((DI4 & DI3 & DI6) & CASCADE(DI2 & DI1 & DI0)));
 		WHEN 1 => GLISS_R = LCELL(RAM.q[7..4] == H"F") & LCELL(RAM.q[3..0] == H"F");
 	END CASE;
 	GLISSER	= GLISS_R;
 
-%
-
-	MDO[].clk	= !CLK42;
---	MDO[].clk	= CLK42;
+--	MDO[].clk	= !CLK42;
+	MDO[].clk	= CLK42;
 
 	MDO[].ena	= CAS;
 
@@ -324,14 +323,10 @@ BEGIN
 		WHEN 1 => MDO[].d = (RAM.q[7..0],RAM.q[7..0]);
 	END CASE;
 
---	Поздняя альтернатива: DO[].clk = DFF(MC_END,!CLK42,,), ena=VCC.
-	-- BASE203: отдельный captured read enable; источник C22_3 не DCP A26_1.
-	-- BASE204 negative-edge completion stage drives the DO bank clock directly.
-	READ_CAPTURE_CLOCK.clk = !CLK42;
-	READ_CAPTURE_CLOCK.d = MC_END;
---	READ_CAPTURE_ENABLE = !READ_CAPTURE_CLOCK; -- BASE203 alternative, not used in BASE204
-	DO[].clk = READ_CAPTURE_CLOCK; -- actual derived clock, author DFF(MC_END,!CLK42)
-	DO[].ena = VCC;
+	DO[].clk		= DFF(MC_END,!CLK42,,);
+--	DO[].clk		= !CLK42;
+	DO[].ena		= VCC;
+--	DO[].ena		= DFF(!MC_END,CLK42,,);
 	DO[].d			= MD[];
 
 --	== accelerator functions ==
@@ -366,7 +361,8 @@ BEGIN
 	RAM_WR			= DFF((!/RD & !ACC_GO & CT0),CLK42,,);
 
 	RAM.wren 		= RAM_WR;
-	RAM.data[] 		= XMD[];	-- R75: w8, дублирование старшей половины отсутствует
+--	R75: data 8 бит без дублирования (rev esb4.data = XMD-сигналы)
+	RAM.data[] 		= XMD[];
 --	RAM.wraddress[] = ACC_CNT[];
 	RAM.wraddress[] = RAM_ADR[];
 	RAM.wrclock		= CLK42;

@@ -7,6 +7,8 @@ INCLUDE "lpm_ram_dp";
 SUBDESIGN dcp
 	(
 	CLK42		: INPUT;
+	IO_WRITE_CLOCK : INPUT; -- Shared registered /IOWR from the top-level capture.
+	XA_PHASE[1..0] : OUTPUT; -- общий существующий MA/XA фазовый банк
 	/RESET		: INPUT;
 
 	/RES		: OUTPUT;
@@ -60,7 +62,6 @@ SUBDESIGN dcp
 	WR_TM9		: OUTPUT;
 	WR_AWG		: OUTPUT;
 	RD_KP11		: OUTPUT;
-	PORT_WRITE_CLK : OUTPUT; -- expose the existing port-clock LCELL for shared TOP consumers
 	KP11_MIX	: OUTPUT;
 
 	REFRESH		: INPUT;
@@ -87,6 +88,9 @@ SUBDESIGN dcp
 	DCPP[7..0]	: OUTPUT;
 
 	DOUBLE_CAS	: INPUT;
+
+	IO_STBX		: OUTPUT;	% экспорт IO_STB для XA-окна top (rev lc_E18_3) %
+	PTX			: OUTPUT;	% экспорт PORTS_X для XA-окна top (rev lc_C33_2, SUSPECTED: стадия-1) %
 
 	)
 VARIABLE
@@ -144,10 +148,14 @@ VARIABLE
 	CAS			: DFFE;
 
 	MA_[11..0]	: DFFE;
+	MA_NEXT[11..0] : NODE;
+	MA_ROW_ACTIVE : LCELL; -- исходный инвертор MA_CT1 (raw lc_C15_2)
+	MA_P0,MA_P1,MA_P2,MA_P3,MA_P4,MA_P6,MA_P8,MA_P9	: LCELL;	% позитивные каскад-концы MA %
+	MA_Q0,MA_Q1,MA_Q2,MA_Q3,MA_Q4,MA_Q6,MA_Q8,MA_Q9	: NODE;		% партнёры каскадов %
 	MCA[1..0]	: DFFE;
 
 	/IOM		: DFFE;
-	IOMM_STATE		: DFFE;
+	/IOMM		: DFFE;
 	/IOMX		: DFFE;
 	/IOMY		: DFFE;
 
@@ -163,8 +171,8 @@ VARIABLE
 
 	MA_CT[1..0]	: DFFE;
 
-	WR_TM9_STATE		: DFFE;
-	RD_KP11_STATE		: DFFE;
+	WR_TM9		: DFFE;
+	RD_KP11		: DFFE;
 
 	/RES		: NODE;
 
@@ -198,16 +206,16 @@ VARIABLE
 	HDD_A[3..0]	: DFF;
 
 	X_ADR[11..0]: LCELL;
-	X_MA_7, X_MA_5: LCELL;
+	X_MA_[11..0]: LCELL;
 
--- Early author address mux: memory/port phase and the I/O phase.
-	IO_STB : DFF; -- one-shot port flag, existing !/IO clock
-	GA_SEL : NODE;
-	MA_NEXT[11..0] : NODE;
-	MA_P0,MA_P1,MA_P2,MA_P3,MA_P4,MA_P6,MA_P8,MA_P9 : LCELL;
+-- ==== MA-мукс ранней версии: трёхселектный (IO_STB·MA_CT1·MA_CT0) ====
+-- каскадная POS-форма: MA_[i].d = !( MA_X & CASCADE(MA_Y) ),
+-- идиома автора (F_ST_[i] = F_ST_X[i] & CASCADE(F_ST_Y[i])).
+	IO_STB		: DFF;		% строб-флаг порта: DFF(/M1,!/IO), rev lc_E18_3 %
+	GA_SEL		: NODE;		% GA-слой: выбор G_LINE vs {MEM.q,A}, rev lc_C5_3 %
+	XGA[7..0]	: NODE;	% побитовые GA-подмуксы (rev C18_6/C25_2/C29_5/C19_8/C5_4/C5_5/C9_3/C9_5) %
 
 	WR_AWGX		: NODE;
-	WR_AWG_STATE : DFFE; -- existing early toggle register, opposite phase of native lc_C16_2
 
 	/IOWR		: NODE;
 
@@ -217,14 +225,10 @@ VARIABLE
 	SPR_[1..0]	: LCELL;
 
 	SYS_ENA		: NODE;
-
-	Z80_BASE_DIV : TFF;
 	MEM_END_HISTORY : DFF;
+	CNF_WRITE_ENABLE, AROM_WRITE_ENABLE, TURBO_WRITE_ENABLE : DFF;
 
 BEGIN
-	/IOMM = IOMM_STATE;
-	WR_TM9 = WR_TM9_STATE;
-	RD_KP11 = RD_KP11_STATE;
 
 %
 	DC.CLK42	= CLK42;
@@ -237,7 +241,7 @@ BEGIN
 	DC./M1		= /M1;
 
 --	DC./IOM;
---	DC.IOMM_STATE;
+--	DC./IOMM;
 --	DC.DCP[7..0];
 
 	DC.DOS		= DOS;
@@ -279,10 +283,8 @@ BEGIN
 --	CLK_Z80	= DFF((!CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 --	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
---	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);	-- Авторский ранний вариант: CT1&CT2 divider, отрицательный CLK21 turbo arm.
-	Z80_BASE_DIV.clk = CLK42;
-	Z80_BASE_DIV.t = CT2 & CT1;
-	CLK_Z80	= DFF((CLK21 & TURBO) or (Z80_BASE_DIV & !TURBO),!CLK42,,);
+--	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
+	CLK_Z80	= DFF((CLK21 & TURBO) or (TFF((!CT2 & CT1),CLK42,,) & !TURBO),!CLK42,,);
 
 --	==============================================================
 	CLK21	= DFF((!CT0 xor CT2),CLK42,,);
@@ -292,33 +294,26 @@ BEGIN
 --	MA_[].ena	= (CT2 xor CT0);
 	MA_[].ena	= CLK21;
 
-	WR_TM9_STATE.clk	= CLK42;
---	WR_TM9_STATE.ena	= (CT2 xor CT0);
-	WR_TM9_STATE.ena	= CLK21;
-	WR_TM9_STATE.prn	= /RES;
+	WR_TM9.clk	= CLK42;
+--	WR_TM9.ena	= (CT2 xor CT0);
+	WR_TM9.ena	= CLK21;
+	WR_TM9.prn	= /RES;
 
-	RD_KP11_STATE.clk	= !CLK42;
---	RD_KP11_STATE.ena	= (CT2 xor CT0);
-	RD_KP11_STATE.ena	= CLK21;
-	RD_KP11_STATE.prn	= /RES;
-	RD_KP11_STATE.d	= !(MA_CT[] == 0);
+	RD_KP11.clk	= !CLK42;
+--	RD_KP11.ena	= (CT2 xor CT0);
+	RD_KP11.ena	= CLK21;
+	RD_KP11.prn	= /RES;
+	RD_KP11.d	= !(MA_CT[] == 0);
 
---	WR_AWGX		= DFF((WR_TM9_STATE or CLK21),!CLK42,,);
---	WR_AWGX		= DFF(GND,!WR_TM9_STATE,,DFF(WR_AWGX,CLK42,,)); -- later author feedback pulse alternative
-	WR_AWG_STATE.clk = !CLK42;
-	WR_AWG_STATE.ena = VCC;
-	WR_AWG_STATE.prn = !WR_TM9_STATE; -- 36e actual asynchronous preset of logical inverse state
---	WR_AWG_STATE.d = WR_TM9_STATE or !WR_AWG_STATE; -- BASE204 synchronous set alternative
-	WR_AWG_STATE.d = !WR_AWG_STATE;
-	WR_AWGX = WR_AWG_STATE;
+--	WR_AWGX		= DFF((WR_TM9 or CLK21),!CLK42,,);
+	WR_AWGX		= DFF(GND,!WR_TM9,,DFF(WR_AWGX,CLK42,,));
 
---	WR_TM9_STATE	= (!MA_CT1 or (!IO_RW & !PORTS_X));
---	WR_TM9_STATE	= (!MA_CT1 or (!/IO & !PORTS_X)); -- later donor gate
-	WR_TM9_STATE = (!MA_CT1 or (IO_STB & !PORTS_X));
+--	WR_TM9	= (!MA_CT1 or (!IO_RW & !PORTS_X));
+	WR_TM9	= (!MA_CT1 or (!/IO & !PORTS_X));
 
 	WR_AWG		= WR_AWGX;
 
-	KP11_MIX	= TFF(VCC,RD_KP11_STATE,,);
+	KP11_MIX	= TFF(VCC,RD_KP11,,);
 
 	WR_DWG		= !MC_BEGIN;
 --	WR_DWG		= DFF(!MC_BEGIN,CLK42,,);
@@ -333,13 +328,14 @@ BEGIN
 	ELSE
 		MA_CT[] = GND;
 	END IF;
+	XA_PHASE[] = MA_CT[];
 
 %
 	MA_[11..0]	bit0 - WG_A5
 				bit1 - WG_A6
 				bit2 - MUX_KP11, 0 - WG,CMOS	1 - KMPS,TM9
 				bit3 - RD/WR	 0 - WRITE		1 - READ
-				bit4 - CS_WG93 or WR_TM9_STATE
+				bit4 - CS_WG93 or WR_TM9
 				bit5 - HDD/CMOS strobe
 				bit7,6	- 	00 - not
 							01 - ????
@@ -368,10 +364,9 @@ BEGIN
 		WHEN 3 => X_ADR[] = (GND,GND,GA[3..2],MEM.q[7..4],GA[7..4]);
 	END CASE;
 
---	R75: из X_MA_ живы только биты 7 и 5 (rev: X_MA_[0..4,6,8..11] мёртвы)
-	CASE !IO_STB IS
-		WHEN 0 => (X_MA_7, X_MA_5) = (MEM.q[7],(MEM.q[5] & !/IOMZ));
-		WHEN 1 => (X_MA_7, X_MA_5) = (GND,GND);
+	CASE IO_RW IS
+		WHEN 0 => X_MA_[] = (HDD_A[2..0],MEM.q[8..6],((MEM.q[5..4]) & (!/IOMZ,!/IOMY)),/WR,MEM.q2,A[6..5]);
+		WHEN 1 => X_MA_[] = (HDD_A[2..0],B"00000",/WR,VCC,A[6..5]);
 	END CASE;
 %
 	CASE MA_CT1 IS
@@ -381,15 +376,43 @@ BEGIN
 	END CASE;
 %
 
-	-- Shared graphic-address mux GA[] above serves VIDEO and MA.
-	IO_STB.clk = !/IO;
-	IO_STB.clrn = LCELL(!IO_STB or !/IO);
-	IO_STB.d = /M1;
-	GA_SEL = GRAF;
+% донорский (поздний) вариант — заменён транскрипцией rev-209
+	CASE (IO_RW,MA_CT1) IS
+		WHEN B"00" =>
+			MA_[] 	= (X_ADR[11..0]);
+		WHEN B"01" =>
+			MA_[] 	= (HDD_A[2..0],MEM.q[8..6],((MEM.q[5..4]) & (!/IOMZ,!/IOMY)),/WR,MEM.q2,A[6..5]);
+		WHEN B"10" =>
+			MA_[] 	= (X_ADR[11..0]);
+		WHEN B"11" =>
+			MA_[] 	= (HDD_A[2..0],B"00000",/WR,VCC,A[6..5]);
+	END CASE;
+%
 
-	CASE MA_CT1 IS
-		WHEN 0 => MA_NEXT[] = (GND,GND,X_ADR[9..0]);
-		WHEN 1 =>
+-- Авторские адресные фазы MA и однотактный флаг I/O.
+
+	IO_STB.clk	= !/IO;
+	IO_STB.clrn	= LCELL(!IO_STB or !/IO);	% one-shot, как lc_E18_5 %
+	IO_STB.d	= /M1;
+
+	GA_SEL = GRAF; -- тот же банк и те же13 полей, отдельного FF в raw нет
+
+
+--	GA-подмуксы: GA_SEL ? G_LINE : {MEM.q | A}
+	XGA[0] = GA[4]; -- существующий общий графический адрес
+	XGA[1] = GA[5]; -- существующий общий графический адрес
+	XGA[2] = GA[6]; -- существующий общий графический адрес
+	XGA[3] = GA[7]; -- существующий общий графический адрес
+	XGA[4] = GA[2]; -- существующий общий графический адрес
+	XGA[5] = GA[1]; -- существующий общий графический адрес
+	XGA[6] = GA[0]; -- существующий общий графический адрес
+	XGA[7] = GA[3]; -- существующий общий графический адрес
+
+	-- Авторский словный MA-мультиплексор; один общий GA и фазовый банк.
+	MA_ROW_ACTIVE = !MA_CT1;
+	CASE MA_ROW_ACTIVE IS
+		WHEN 1 => MA_NEXT[] = (GND,X_ADR[10..0]); -- BASE209 включает row/GA bit10
+		WHEN 0 =>
 			MA_NEXT[11..9] = HDD_A[2..0];
 			MA_NEXT[8..6] = MEM.q[8..6] & IO_STB;
 			MA_NEXT5 = MEM.q[5] & !/IOMZ & IO_STB;
@@ -398,7 +421,6 @@ BEGIN
 			MA_NEXT2 = !IO_STB or MEM.q[2];
 			MA_NEXT[1..0] = A[6..5];
 	END CASE;
-	-- Positive functions at existing MA terminal LCELLs (MA_P0 keeps ACF name).
 	MA_P0 = MA_NEXT[0];
 	MA_[0].d = MA_P0;
 	MA_P1 = MA_NEXT[1];
@@ -478,8 +500,7 @@ CAS		\__/  | \__/|\__/
 
 --	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);
 
-	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);	-- rev-203: lc_E27_7 = DFFE(lc_E27_3 or (!lc_E27_1 & lc_C4_3), p183) — posedge
---	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),!CLK42,,);
+	MC_RQ		= DFF(((MEM_RW & IO_RW) or (/RD & /WR)),CLK42,,);
 
 	MC_BEGIN.clk= CLK42;
 	MC_BEGIN.ena= CT1 & CT2;
@@ -524,30 +545,28 @@ CAS		\__/  | \__/|\__/
 --	CAS.prn		= !BLK_C;
 
 --	/MR_WAIT	= (MEM_RW or /CASH or DFF(MC_END,CLK42,!/MR,)) or (!TURBO & !ACC_ON);
-	MEM_END_HISTORY.clk = CLK42;
-	MEM_END_HISTORY.clrn = !/MR;
+	MEM_END_HISTORY.clk = CLK42; MEM_END_HISTORY.clrn = !/MR;
 	MEM_END_HISTORY.d = MC_END;
-	/MR_WAIT	= (MEM_RW or /CASH or MEM_END_HISTORY) or (!TURBO & !ACC_ON);
+	/MR_WAIT = MEM_END_HISTORY or LCELL(MEM_RW or /CASH or (!TURBO & !ACC_ON));
 
-	MEM_RW		= LCELL(/MR or !/RF);	-- rev-203: lc_C4_3 = LCELL(!p25 or p184) — комбинационный, FF нет
+--	MEM_RW		= LCELL(/MR or !/RF);
 
 	-- anti gluk!
---	MEM_RW		= DFF(!/RF,!/MR,,LCELL(MEM_RW or !/MR));	-- rev-203: отдельного FF нет
-	IO_RWM		= !IO_STB;	-- rev-203: единственный флаг-FF lc_B33_6 (= IO_STB), IO_RWM-FF нет
---	IO_RWM		= DFF(!/M1,!/IO,,LCELL(IO_RW or !/IO));
+	MEM_RW		= LCELL(/MR or !/RF);
+	IO_RWM = !IO_STB; -- единственный исходный захват /M1 по !/IO
 
 	IO_RW		= DFF(/IO,CLK42,,/M1);
 
-	IOMM_STATE.clk	= CLK42;
---	IOMM_STATE.ena	= CT0 xor CT2;
-	IOMM_STATE.ena	= CLK21;
-	IOMM_STATE.d		= !IO_STB or !MC_END or DFF((WT_CT[] == 0),CLK42,,); -- actual203 D proof IOMM_LOCAL014.json
-	IOMM_STATE.prn	= /RES;
+	/IOMM.clk	= CLK42;
+--	/IOMM.ena	= CT0 xor CT2;
+	/IOMM.ena	= CLK21;
+	/IOMM.d		= !IO_STB or !MC_END or DFF((WT_CT[] == 0),CLK42,,);
+	/IOMM.prn	= /RES;
 
 	/IOMX.clk	= CLK42;
 --	/IOMX.ena	= CT0 xor CT2;
 	/IOMX.ena	= CLK21;
-	/IOMX.d		= IOMM_STATE;
+	/IOMX.d		= /IOMM;
 	/IOMX.prn	= /RES;
 
 	/IOMY.clk	= CLK42;
@@ -558,6 +577,8 @@ CAS		\__/  | \__/|\__/
 	/IOMY.prn	= PORTS_X;
 
 	PORTS_X		= DFF(((DCPP[7..4] == B"0010") or (DCPP[7..4] == B"0001")),CLK42,,);
+	PTX			= PORTS_X;
+	IO_STBX		= IO_STB;
 
 	/IOMZ.clk	= CLK42;
 --	/IOMZ.ena	= CT0 xor CT2;
@@ -668,21 +689,25 @@ CAS		\__/  | \__/|\__/
 --	=== Port Decoder =============================================
 
 	DCP_CX		= (DCPP[] == B"1100XXXX");
-	-- Ранние PN/SC/CNF: декод DCPP комбинационный, такт /IOWR отдельный.
-	SYS_ENA		= DCP_CX & (DCPP[] == B"XXXXX110");
+	SYS_ENA		= DFF((DCP_CX & (DCPP[] == B"XXXXX110")),CLK42,,);
 
 --	/IOWR		= DFF((/WR or /IO),CLK42,,!/IO);
---	/IOWR		= LCELL(/IO or /WR or !/M1); -- later M1 mask alternative
-	/IOWR = LCELL(/IO or /WR);
-	PORT_WRITE_CLK = /IOWR;
+	/IOWR		= IO_WRITE_CLOCK;
 
-    CNF[].ena 	= SYS_ENA & DI2; CNF[].d = DI[];
-	AROM16.ena 	= SYS_ENA & !DI1; AROM16.d = DI0;
-	TB_SW.ena 	= SYS_ENA & DI1; TB_SW.d = DI0;
+	-- У этой версии DI квалифицирует регистры разрешения ДО фронта CLK42.
+	CNF_WRITE_ENABLE.clk = CLK42;
+	AROM_WRITE_ENABLE.clk = CLK42;
+	TURBO_WRITE_ENABLE.clk = CLK42;
+	CNF_WRITE_ENABLE.d = DCP_CX & (DCPP[] == B"XXXXX110") & DI2;
+	AROM_WRITE_ENABLE.d = DCP_CX & (DCPP[] == B"XXXXX110") & !DI1;
+	TURBO_WRITE_ENABLE.d = DCP_CX & (DCPP[] == B"XXXXX110") & DI1;
+	CNF[].ena = CNF_WRITE_ENABLE; CNF[].d = DI[];
+	AROM16.ena = AROM_WRITE_ENABLE; AROM16.d = DI0;
+	TB_SW.ena = TURBO_WRITE_ENABLE; TB_SW.d = DI0;
 	SYS.ena 	= SYS_ENA; SYS.d    = !A6;
 
-	SC[].ena 	= (DCP_CX & (DCPP[] == B"XXXXX000"))	;SC[].d   = DI[];
-	PN[].ena 	= (DCP_CX & (DCPP[] == B"XXXXX001"))	;PN[].d	  = DI[];
+	SC[].ena 	= DFF((DCP_CX & (DCPP[] == B"XXXXX000")),CLK42,,)	;SC[].d   = DI[];
+	PN[].ena 	= DFF((DCP_CX & (DCPP[] == B"XXXXX001")),CLK42,,)	;PN[].d	  = DI[];
 
 	TB_SW.clk	= /IOWR;
 	AROM16.clk	= /IOWR;
@@ -698,8 +723,9 @@ CAS		\__/  | \__/|\__/
 
 	SC[].clrn		= /RESET & !CNF6;	-- Scorpion-OFF
 
-	PN[5..0].clrn	= /RESET & !CNF5;	-- reset PN5
-	PN[7..5].clrn	= /RESET & CNF7;	-- set Pentagon-512
+	PN[4..0].clrn = /RESET & !CNF5;
+	PN5.clrn = /RESET & (!CNF5 or CNF7); -- действительная общая граница двух групп
+	PN[7..6].clrn = /RESET & CNF7;
 
 	PN4Q	= PN4;
 
@@ -726,29 +752,15 @@ CAS		\__/  | \__/|\__/
 
 	SPR_[]	= !SC1 & (DOS,(PN4 or !DOS));	-- expansion/dos/basic128/basic48
 
-	-- Полная авторская early ROM table: OLD_AHDL/SP2000/DCP2.TDF.
-	CASE (SC1,PN4,DOS,SYS,AROM16,TEST_R) IS
-
-		WHEN B"XXX00X" => RA[] = B"1000";
-
-		WHEN B"XXX01X" => RA[] = B"0000";
-
-		WHEN B"1XX10X" => RA[] = B"1000";
-
-		WHEN B"1XX11X" => RA[] = B"0000";
-
-		WHEN B"0X01XX" => RA[] = B"1001";
-
-		WHEN B"0011X0" => RA[] = B"1010";
-
-		WHEN B"0111X0" => RA[] = B"1011";
-
-		WHEN B"0011X1" => RA[] = B"0010";
-
-		WHEN B"0111X1" => RA[] = B"0011";
-
+	-- Ранняя авторская таблица ROM (OLD_AHDL/SP2000/DCP2.TDF:622),
+	-- факторизованная по64 комбинациям и проверенная по24 native PAD-полям.
+	RA[16] = GND;
+	RA[15] = SYS & !SC1 & DOS;
+	RA[14] = SYS & !SC1 & (PN4 or !DOS);
+	CASE (SYS,SC1) IS
+		WHEN B"0X", B"11" => RA[17] = !AROM16;
+		WHEN B"10" => RA[17] = !(DOS & TEST_R);
 	END CASE;
-
 
 --	====================================
 
@@ -760,8 +772,8 @@ CAS		\__/  | \__/|\__/
 	END CASE;
 	MPGS[7..6]	= VCC;
 
-	STARTING = DFF(GND,VCC,/RESET,(/IO or /RD));	-- R75: rev lc_E34_2 = DFFE(GND,VCC,/RESET,(/IO or /RD))
---	STARTING = LCELL(/RESET & (STARTING or !(/IO or /RD)));
+--	STARTING = DFF(GND,VCC,/RESET,(/IO or /RD));
+	STARTING = LCELL(/RESET & (STARTING or !(/IO or /RD)));
 
 	PGS[].clk	= !CLK42;
 	CASE (LCELL(/IO & !(A14 & A15 & !STARTING)),MC_END) IS

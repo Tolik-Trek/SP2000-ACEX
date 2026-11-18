@@ -22,6 +22,10 @@ SUBDESIGN video2
 
 	BLANK		: OUTPUT;
 
+--	R78: «видеосинхра прошла» — 3 фронта HSYNC после включения
+--	(rev lc_C20_7; входит в состав драйвера /RESET, rev lc_C20_3)
+	LN_RDY		: OUTPUT;
+
 	START_UP	: INPUT;
 	COPY_SINC_H	: INPUT;
 	COPY_SINC_V	: INPUT;
@@ -83,9 +87,9 @@ VARIABLE
 
 	ZX_COLOR[3..0]	: NODE;
 
-	PHASE_CT[5..0] : DFFE;
-	H_COUNT[5..0] : DFFE;
-	V_COUNT[8..0] : DFFE;
+	CT[5..0]	: DFFE;
+	CTH[5..0]	: DFFE;
+	CTV[8..0]	: DFFE;
 	CTF[6..0]	: DFF;
 
 	VXA[19..0]	: DFFE;
@@ -96,7 +100,7 @@ VARIABLE
 	VXD3[7..0]	: DFFE;
 
 	E_WR		: NODE;
-	E_WRD		: NODE; -- BASE204 delayed write-window qualifier for MXWE
+	E_WRD		: NODE;
 
 	BLANK		: NODE;
 	BORD		: NODE;
@@ -104,12 +108,12 @@ VARIABLE
 	INTTX		: NODE;
 
 	VLA[17..0]	: DFF;
+	VLA_MUX[10..0] : LCELL; -- исходные терминальные функции адреса VRAM
+	VLA_NEXT[17..0] : NODE;
 --	SVA[17..0]	: NODE;
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
 	RSVA[8..0]	: NODE;
-	VLA_MUX[10..0] : LCELL; -- positive terminals of the existing vector address mux
-	VLA_NEXT[17..0] : NODE; -- author vector CASE, positive terminal functions
 --	RSVA[8..0]	: DFF;
 
 	V_CST[1..0]	: DFF;
@@ -190,12 +194,12 @@ VARIABLE
 	MS_POINT2	: NODE;
 	MS_PNT		: NODE;
 
---	R75: спрайтовая RAM мыши в этой версии отсутствует (нет 6-го EAB в rev)
+--	R75: 6-го EAB для спрайта мыши в ранней версии нет (rev: 5 EAB)
 --	MS_DAT		: LPM_RAM_DP WITH (LPM_WIDTH=16,LPM_WIDTHAD=8,LPM_FILE="MOUSE.MIF");
 
 	SCR_ENA		: DFFE;
 	V_WR_[3..0]	: LCELL;
-	V_WEY[3..0]	: NODE; -- 36e direct mask outputs; OE fanout LCELLs are in TOP
+	V_WEY[3..0]	: LCELL;
 
 	V_WE_R		: NODE;
 
@@ -203,7 +207,15 @@ VARIABLE
 
 	V_EN[3..0]	: NODE;
 
---	F_WR		: NODE; -- later donor write-mask capture, absent in BASE203
+	F_WR		: NODE;
+
+--	R78: posedge-копии sync-фронтов (rev lc_C27_8 / lc_A5_8):
+--	сырые !clk-импульсы COPY_SINC_* пересинхронизированы на CLK42,
+--	именно копии используются для clrn/prn счётчиков и ena CT[5..3].
+	SINC_H42	: NODE;
+	SINC_V42	: NODE;
+--	R78: построчный сдвиг VCC по фронту HSYNC (rev lc_C20_4/lc_C20_2/lc_C20_7)
+	LN_ST[2..0]	: NODE;
 
 BEGIN
 
@@ -213,29 +225,26 @@ BEGIN
 		V_WE.d		= VCC; WR_COL.d		= VCC; WR_PIC.d		= VCC;
 		V_WET[].d	= VCC;
 	END DEFAULTS;
-	CTH[] = H_COUNT[];
-	CTV[] = V_COUNT[];
-	CT[] = PHASE_CT[];
-
 
 	ZX_COLOR[] = ZX_COL[];
 
 --	=== MOUSE counters ========
 
-	MS_X[].clk	= !PHASE_CT1;
-	CASE LCELL(H_COUNT[5..2] == 12) IS
+	MS_X[].clk	= !CT1;
+	CASE LCELL(CTH[5..2] == 12) IS
 		WHEN 0 => MS_X[] = MS_X[] + 1;
 		WHEN 1 => MS_X[] = (!MOUSE_X[9..0]);
 	END CASE;
 
-	MS_Y[].clk	= !H_COUNT5;
-	CASE LCELL(V_COUNT8 & !V_COUNT5 & V_COUNT4) IS
+	MS_Y[].clk	= !CTH5;
+	CASE LCELL(CTV8 & !CTV5 & CTV4) IS
 		WHEN 0 => MS_Y[] = MS_Y[] + 1;
 		WHEN 1 => MS_Y[] = (GND,!MOUSE_Y[8..0]);
 	END CASE;
 
 	MS_PNT = DFF(((MS_X[] == B"100000XXXX") & (MS_Y[] == B"100000XXXX")),CLK42,,);
 
+--	R75: MS_DAT отсутствует — порты закомментированы
 --	MS_DAT.wren 		= GND;
 --	MS_DAT.data[] 		= GND;
 --	MS_DAT.wraddress[]	= GND;
@@ -250,85 +259,91 @@ BEGIN
 		MS_POINT	= GND;
 		MS_POINT2	= GND;
 	ELSE GENERATE
-		MS_POINT	= DFF((MS_PNT & MS_PNT),CLK42,,);	-- R75: MS_DAT нет — ветка мёртвая
+--	R75: dead-path самовыражение (как в rev-референсе раннего поколения)
+		MS_POINT	= DFF((MS_PNT & MS_PNT),CLK42,,);
 		MS_POINT2	= DFF((MS_PNT & MS_PNT),CLK42,,);
 	END GENERATE;
 
 --	=== Sinc-counts GENERATOR ============================================
 
---	PHASE_CT[].clrn	= START_UP;
+--	CT[].clrn	= START_UP;
 
---	(,H_COUNT[5..0].clrn,PHASE_CT[5].clrn) = !COPY_SINC_H or HOR_PLACE;
---	(,H_COUNT[5..0].prn ,PHASE_CT[5].prn ) = !COPY_SINC_H or !HOR_PLACE;
+--	(,CTH[5..0].clrn,CT[5].clrn) = !COPY_SINC_H or HOR_PLACE;
+--	(,CTH[5..0].prn ,CT[5].prn ) = !COPY_SINC_H or !HOR_PLACE;
 
---	V_COUNT[].clrn = !COPY_SINC_V or VER_PLACE;
---	V_COUNT[].prn  = !COPY_SINC_V or !VER_PLACE;
+--	CTV[].clrn = !COPY_SINC_V or VER_PLACE;
+--	CTV[].prn  = !COPY_SINC_V or !VER_PLACE;
 
---	PHASE_CT[5].clrn		= !COPY_SINC_H; -- later donor; raw203 phase FF have no async reset
+--	R78: clrn/prn счётчиков — от posedge-копий sync-фронтов (rev !lc_C27_8/!lc_A5_8)
+	SINC_H42	= DFF(COPY_SINC_H,CLK42,,);
+	SINC_V42	= DFF(COPY_SINC_V,CLK42,,);
 
+	CT[5].clrn = VCC; -- Raw phase FF has no asynchronous sync clear.
+
+	-- Native horizontal sync reload = 46 (2Eh), proven over all 64 counter states.
+	CTH[0].clrn		= !SINC_H42;
+	CTH[1].prn 		= !SINC_H42;
+	CTH[2].prn 		= !SINC_H42;
+	CTH[3].prn 		= !SINC_H42;
+	CTH[4].clrn 		= !SINC_H42;
+	CTH[5].prn		= !SINC_H42;
+
+	-- Native vertical sync reload = 280 (118h), proven over all 512 counter states.
+	CTV[2..0].clrn = !SINC_V42;
+	CTV[4..3].prn = !SINC_V42;
+	CTV[7..5].clrn = !SINC_V42;
+	CTV[8].prn = !SINC_V42;
+
+--	R78: построчный сдвиг (rev lc_C20_4/lc_C20_2/lc_C20_7, ena=lc_C27_8)
+	LN_ST0			= DFFE(VCC,CLK42,,,SINC_H42);
+	LN_ST1			= DFFE(LN_ST0,CLK42,,,SINC_H42);
+	LN_ST2			= DFFE(LN_ST1,CLK42,,,SINC_H42);
+	LN_RDY			= LN_ST2;
+
+	CT[5..0].clk	= CLK42;
+	CTH[5..0].clk	= CLK42;
+	CTV[8..0].clk	= CLK42;
+
+	CT[2..0].ena	= VCC;
+	CASE CT[2..0] IS
+		WHEN 0 => CT[2..0] = 1;
+		WHEN 1 => CT[2..0] = 2;
+		WHEN 2 => CT[2..0] = 4;
+		WHEN 3 => CT[2..0] = 4;
+		WHEN 4 => CT[2..0] = 5;
+		WHEN 5 => CT[2..0] = 6;
+		WHEN 6 => CT[2..0] = 0;
+		WHEN 7 => CT[2..0] = 0;
+	END CASE;
+								  -- for remove sinc jitter
+--	R78: rev lc_A1_5 = DFFE((!CT4 & lc_C27_8) or (CT0 & CT2))
+	CT[5..3].ena	= DFF(((CT0 & CT2) or (SINC_H42 & !CT4)),CLK42,,);
+--	CT[5..3].ena	= DFF((CT0 & CT2),CLK42,,);
+	CT[5..3]		= CT[5..3]+1;
 %
--- Later donor raster reload values retained as historical source evidence.
-	-- set CTH to 50 (32h)
-	H_COUNT[0].clrn		= !COPY_SINC_H;
-	H_COUNT[1].prn 		= !COPY_SINC_H;
-	H_COUNT[2].clrn		= !COPY_SINC_H;
-	H_COUNT[3].clrn		= !COPY_SINC_H;
-	H_COUNT[4].prn 		= !COPY_SINC_H;
-	H_COUNT[5].prn		= !COPY_SINC_H;
-
-	-- set CTV to 122h
-	V_COUNT[1].prn		= !COPY_SINC_V;
-	V_COUNT[3..2].clrn	= !COPY_SINC_V;
-
-	V_COUNT[4].clrn		= !COPY_SINC_V;
-	V_COUNT[5].prn		= !COPY_SINC_V;
-	V_COUNT[7..6].clrn	= !COPY_SINC_V;
-	V_COUNT[8].prn		= !COPY_SINC_V;
-
+	CASE CT[4..3] IS
+		WHEN 0 => CT[5..3]	= CT[5..3]+1;
+		WHEN 1 => CT[5..3]	= CT[5..3]+1;
+		WHEN 2 => CT[5..3]	= CT[5..3]+1;
+		WHEN 3 => CT[5..3]	= CT[5..3]+1;
+	END CASE;
 %
+	CTH[].ena		= DFF(((CT[5..2] == 15) & CT0),CLK42,,);
+	CTV[].ena		= DFF(((CT[5..2] == 15) & CT0 & (CTH[] == 48)),CLK42,,);
 
-	-- Actual203 raster reloads, independently proved from native counters.
-	-- H=46 (101110), V=280 (100011000); all bits have the shared async strobe.
-	H_COUNT0.clrn = !COPY_SINC_H;
-	H_COUNT4.clrn = !COPY_SINC_H;
-	H_COUNT[3..1].prn = !COPY_SINC_H;
-	H_COUNT5.prn = !COPY_SINC_H;
-	V_COUNT[2..0].clrn = !COPY_SINC_V;
-	V_COUNT[7..5].clrn = !COPY_SINC_V;
-	V_COUNT[4..3].prn = !COPY_SINC_V;
-	V_COUNT8.prn = !COPY_SINC_V;
-
-	PHASE_CT[5..0].clk	= CLK42;
-	H_COUNT[5..0].clk	= CLK42;
-	V_COUNT[8..0].clk	= CLK42;
-
-	-- Early phase generator: two-bit modulo-three phase and four-bit slot count.
-	-- Actual203: D16_2=PHASE_CT0, D16_6=PHASE_CT1, E6_1=PHASE_CT2, A6_4=PHASE_CT3,
-	-- A6_8=PHASE_CT4, A6_2=PHASE_CT5. All six use CLK42; no async reset/preset.
-	PHASE_CT[1..0].ena = VCC;
-	PHASE_CT0.d = !(PHASE_CT0 or PHASE_CT1);
-	PHASE_CT1.d = PHASE_CT0 & !PHASE_CT1;
-	PHASE_CT[5..2].ena = PHASE_CT1;
-	PHASE_CT[5..2].d = PHASE_CT[5..2] + 1;
-
-	-- A6_7 registers the slot-terminal decode; A6_6 combines it with PHASE_CT1.
-	H_COUNT[].ena = PHASE_CT1 & DFF((PHASE_CT[5..2] == 15),CLK42,,);
---	V_COUNT[].ena		= DFF(((PHASE_CT[5..2] == 15) & PHASE_CT0 & (H_COUNT[] == 48)),CLK42,,); -- later phase expression
-	V_COUNT[].ena = PHASE_CT1 & DFF(((PHASE_CT[5..2] == 15) & (H_COUNT[] == 48)),CLK42,,);
-
-	IF H_COUNT[] == 55 THEN
-		H_COUNT[]	= GND;
+	IF CTH[] == 55 THEN
+		CTH[]	= GND;
 	ELSE
-		H_COUNT[]	= H_COUNT[] + 1;
+		CTH[]	= CTH[] + 1;
 	END IF;
 
-	IF V_COUNT[] == 319 THEN
-		V_COUNT[]	= GND;
+	IF CTV[] == 319 THEN
+		CTV[]	= GND;
 	ELSE
-		V_COUNT[]	= V_COUNT[] + 1;
+		CTV[]	= CTV[] + 1;
 	END IF;
 
-	CTF[].clk	= V_COUNT8;
+	CTF[].clk	= CTV8;
 	CTF[]		= CTF[]+1;
 
 --	==== Video ==========================================================
@@ -345,10 +360,10 @@ BEGIN
 	DOUBLE.clk = CLK42; DOUBLE.ena = !E_WR; DOUBLE	= DOUBLE_CAS;
 	VXA[].clk  = CLK42; VXA[].ena  = !E_WR;
 
-	VXD0[].clk = CLK42; VXD0[].ena = !E_WR;	VDO0[]	= VXD0[];
-	VXD1[].clk = CLK42; VXD1[].ena = !E_WR;	VDO1[]	= VXD1[];
-	VXD2[].clk = CLK42; VXD2[].ena = !E_WR;	VDO2[]	= VXD2[];
-	VXD3[].clk = CLK42; VXD3[].ena = !E_WR;	VDO3[]	= VXD3[];
+	VXD0[].clk = CLK42; VXD0[].ena = !E_WRD;	VDO0[]	= VXD0[];
+	VXD1[].clk = CLK42; VXD1[].ena = !E_WRD;	VDO1[]	= VXD1[];
+	VXD2[].clk = CLK42; VXD2[].ena = !E_WRD;	VDO2[]	= VXD2[];
+	VXD3[].clk = CLK42; VXD3[].ena = !E_WRD;	VDO3[]	= VXD3[];
 
 --	VXD0[] = D[];
 --	VXD1[] = D[];
@@ -371,9 +386,9 @@ BEGIN
 	SCR_ENA.ena	= !E_WR;
 	SCR_ENA.d	= !(VAI19 or ZX_SCREEN);
 
-	E_WRD	= DFF(E_WR,CLK42,,); -- BASE204 real registered qualifier for MXWE
---	E_WR = LCELL(WR or !(VAI19 or ZX_SCREEN) or !DFF(WR,CLK42,,)); -- BASE203 range-qualified alternative
-	E_WR = LCELL(WR or !DFF(WR,CLK42,,));
+	E_WRD	= DFF(E_WR,CLK42,,);
+	E_WR = LCELL(WR or !(VAI19 or ZX_SCREEN) or !DFF(WR,CLK42,,));
+--	E_WR = LCELL(WR or !DFF(WR,CLK42,,));
 
 --	****************************************************
 
@@ -382,9 +397,7 @@ IF MODE == "SPRINTER" GENERATE
 --	VAI[19]	- switch adress mode	1 - graf mode, 0 - spectrum mode
 
 --	MXWE	= DFF(((DFF(E_WR,CLK42,,) or SCR_ENA)  & MXWE),CLK42,,V_WE);
-	-- Active-low capture latch: logical MXWE is inverse physical state.
-	-- V_WE is asynchronous active-low preset; E_WR qualifies the D feedback.
-	MXWE	= DFF(((E_WRD or SCR_ENA) & MXWE),CLK42,,V_WE);
+	MXWE	= DFF(MXWE,CLK42,E_WR,V_WE);
 
 	IF VAI[19] THEN
 		-- in graf mode all 256k(512k) range
@@ -398,16 +411,16 @@ IF MODE == "SPRINTER" GENERATE
 --	BLANK	= DFF((BORD & MODE03 & MODE02),WR_PIC,,);
 --	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
-	BORD	= DFF((MODE0[7..4] == 15),WR_PIC,,);
+	BORD = DFF((MODE0[7..4] == 15),WR_PIC,,);
 	BLANK	= DFF(((BORD & MODE03 & MODE02) or DIR_PORT4),WR_PIC,,);
 	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
-	INTT	= DFF(!(INTTX & (V_COUNT[2..0] == 7)),PHASE_CT5,,);
+	INTT	= DFF(!(INTTX & (CTV[2..0] == 7)),CT5,,);
 
---	INTT	= DFF((INTTX or DFF(INTTX,PHASE_CT5,,)),PHASE_CT5,,);
---	INTT	= DFF(!(BLANK & (V_COUNT[2..0] == 7)),CLK42,,MODE0[0]);
+--	INTT	= DFF((INTTX or DFF(INTTX,CT5,,)),CT5,,);
+--	INTT	= DFF(!(BLANK & (CTV[2..0] == 7)),CLK42,,MODE0[0]);
 
-	CASE PHASE_CT[2..0] IS
+	CASE CT[2..0] IS
 		WHEN B"110" => VCM[2..0].d = 5; -- 101
 		WHEN B"000" => VCM[2..0].d = 1; -- 001
 		WHEN B"001" => VCM[2..0].d = 4; -- 100
@@ -416,9 +429,9 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN B"101" => VCM[2..0].d = 0; -- 000
 	END CASE;
 
+
 	CASE VCM[1..0] IS
 		WHEN 0 =>
-			-- 36e low address mux: actual native row00 selects 00.
 			VLA_NEXT[] = (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
 			V_CST[].d = (VCC,GND);
 			V_WE.d		= VCC;
@@ -446,14 +459,14 @@ IF MODE == "SPRINTER" GENERATE
 			V_WET[].d	= MXWE or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
 		WHEN 3 =>
 			WR_PIC.d	= X_MODE5;
-			VLA_NEXT[] = (DIR_PORT3,H_COUNT[5..0],PHASE_CT5,VCC,VCC,V_COUNT[8..3],GND,GND);
-			WR_MODE.d	= !(PHASE_CT[5..3] == B"111") & !(PHASE_CT4 & PHASE_CT3 & !MODE0[5]);
+			VLA_NEXT[] = (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
+			WR_MODE.d	= !(CT[5..3] == B"111") & !(CT4 & CT3 & !MODE0[5]);
 			V_CST[].d 	= (VCC,GND);
 			V_WE.d		= VCC;
 			V_WEX.d		= VCC;
 	END CASE;
 
-	-- Positive functions at the existing VLA mux terminal LCELLs.
+	-- Тот же четырёхвходовый словный mux в положительной форме.
 	VLA[0].d = VLA_NEXT[0];
 	VLA[1].d = VLA_NEXT[1];
 	VLA_MUX[0] = VLA_NEXT[2];
@@ -509,8 +522,8 @@ IF MODE == "SPRINTER" GENERATE
 
 --	M_CTV[2..0].clk	= CLK42;
 --	M_CT[5..3].clk	= CLK42;
-	M_CTV[2..0]	= (!MODE2[2] & V_COUNT[2..0]) or MODE2[2] & (MODE2[1],V_COUNT[2..1]);
-	M_CT[5..3]	= (!MODE2[2] & (PHASE_CT[5],!PHASE_CT[4..3])) or MODE2[2] & (MODE2[0],!PHASE_CT[5..4]);
+	M_CTV[2..0]	= (!MODE2[2] & CTV[2..0]) or MODE2[2] & (MODE2[1],CTV[2..1]);
+	M_CT[5..3]	= (!MODE2[2] & (CT[5],!CT[4..3])) or MODE2[2] & (MODE2[0],!CT[5..4]);
 
 	CASE (!VCM2,MODE0[4]) IS
 --	CASE (!VCM1,MODE0[4]) IS
@@ -519,8 +532,8 @@ IF MODE == "SPRINTER" GENERATE
 			RSVA[] = (M_CTV[2..0],MODE1[2..0],M_CT[5..3]);
 			SVA[17..13] = MODE1[7..3];
 
---			SVA[12..10] = V_COUNT[2..0];
---			SVA[5..0]	= (MODE1[2..0],PHASE_CT5,!PHASE_CT[4..3]);
+--			SVA[12..10] = CTV[2..0];
+--			SVA[5..0]	= (MODE1[2..0],CT5,!CT[4..3]);
 		WHEN B"01" =>
 			--	ZX-atr adress  --
 			RSVA[] = (MODE2[2..0],SCR128,VCC,VCC,GND,!MODE0[7..6]);
@@ -530,18 +543,18 @@ IF MODE == "SPRINTER" GENERATE
 --			SVA[5..0]	= (SCR128,VCC,VCC,GND,!MODE0[7..6]);
 		WHEN B"11" =>
 			--	ZX-pic adress  --
-			RSVA[] = (MODE1[2..0],SCR128,MODE0[7..6],V_COUNT2,!V_COUNT1,!V_COUNT0);
+			RSVA[] = (MODE1[2..0],SCR128,MODE0[7..6],CTV2,!CTV1,!CTV0);
 			SVA[17..13] = MODE1[7..3];
 
 --			SVA[12..10] = MODE1[2..0];
---			SVA[5..0]	= (SCR128,MODE0[7..6],V_COUNT2,!V_COUNT1,!V_COUNT0);
+--			SVA[5..0]	= (SCR128,MODE0[7..6],CTV2,!CTV1,!CTV0);
 	END CASE;
 
 --	X_MODE_BOND	= LCELL(LCELL(DCOL[7..4] == 15) & LCELL(DCOL[3..0] == 15) & DFF((MODE0[7] & MODE0[5] & !MODE0[4]),LWR_COL,VCC,VCC));
 	X_MODE_BOND	= GND;
 
---	LD_PIC	= LCELL((MODE0[5] & DFF((PHASE_CT[5..3] == B"000"),CLK42,,)) or (!MODE0[5] & DFF((PHASE_CT[4..2] == B"000"),CLK42,,)));
-	LD_PIC	= LCELL((MODE0[5] & DFF((PHASE_CT[5..3] == B"000"),CLK42,,)) or (!MODE0[5] & DFF((PHASE_CT[4..2] == B"000"),CLK42,,)));
+--	LD_PIC	= LCELL((MODE0[5] & DFF((CT[5..3] == B"000"),CLK42,,)) or (!MODE0[5] & DFF((CT[4..2] == B"000"),CLK42,,)));
+	LD_PIC	= LCELL((MODE0[5] & DFF((CT[5..3] == B"000"),CLK42,,)) or (!MODE0[5] & DFF((CT[4..2] == B"000"),CLK42,,)));
 
 --	CASE (DFF(VLA1,!CLK42,,),DFF(VLA0,!CLK42,,)) IS
 
@@ -639,8 +652,8 @@ IF MODE == "SPRINTER" GENERATE
 	BRVA[].clrn	= !MS_POINT;
 	BRVA[].prn	= !MS_POINT2;
 
---	CASE (LCELL(X_MODE4 or X_MODE5),PHASE_CT2) IS
-	CASE (DFF((MODE0[4] or MODE0[5]),LWR_COL,,),PHASE_CT2) IS
+--	CASE (LCELL(X_MODE4 or X_MODE5),CT2) IS
+	CASE (DFF((MODE0[4] or MODE0[5]),LWR_COL,,),CT2) IS
 		WHEN B"1X" => BRVA[7..0] = DCOL[];
 		WHEN B"01" => BRVA[7..0] = (B"0000",DCOL[7..4]);
 		WHEN B"00" => BRVA[7..0] = (B"0000",DCOL[3..0]);
@@ -678,35 +691,33 @@ IF MODE == "SPRINTER" GENERATE
 --	V_WEX.prn	= (DFF(GND,CLK42,,!V_WEX));
 
 
-	-- 36e measured V_WE chain: inverse-Q tap followed by two unity buffers, then all nibble masks.
 	V_WEMMM	= LCELL(V_WE);
 	V_WEMMN	= LCELL(V_WEMMM);
 	V_WEMMO	= LCELL(V_WEMMN);
-	V_WEMM	= V_WEMMO;
+	V_WEMM	= LCELL(V_WEMMO);
 
-	V_WRM	= V_WEMMO;
-	V_WRM2	= V_WEMMO;
+	V_WRM	= LCELL(V_WEMMN & V_WEMMM);
+	V_WRM2	= LCELL(V_WEMMN & V_WEMMM);
 
-	V_WEM	= V_WEMMO;
-	V_WEM2	= V_WEMMO;
+	V_WEM	= LCELL(V_WEMMM & V_WEMMO);
+	V_WEM2	= LCELL(V_WEMMM & V_WEMMO);
 
-	V_EN3	= (!(!VLA1 & (!VLA0 or DOUBLE)));
-	V_EN2	= (!(!VLA1 & (VLA0 or DOUBLE)));
-	V_EN1	= (!(VLA1 & (!VLA0 or DOUBLE)));
-	V_EN0	= (!(VLA1 & (VLA0 or DOUBLE)));
+	V_EN3	= DFF(!(!VXA1 & (!VXA0 or DOUBLE)),CLK42,F_WR,);
+	V_EN2	= DFF(!(!VXA1 & (VXA0 or DOUBLE)) ,CLK42,F_WR,);
+	V_EN1	= DFF(!(VXA1 & (!VXA0 or DOUBLE)) ,CLK42,F_WR,);
+	V_EN0	= DFF(!(VXA1 & (VXA0 or DOUBLE))  ,CLK42,F_WR,);
 
---	F_WR	= DFF(VCC,V_WE,,); -- later donor alternative; BASE203 masks are combinational
+	F_WR	= DFF(VCC,V_WE,,);
 
 	V_WR_3	= V_WRM or V_EN3;
 	V_WR_2	= V_WRM2 or V_EN2;
 	V_WR_1	= V_WRM or V_EN1;
 	V_WR_0	= V_WRM or V_EN0;
 
--- 36e masks use the registered output address VLA, not the earlier VXA capture bank.
-	V_WEY3	= V_WR_3;
-	V_WEY2	= V_WR_2;
-	V_WEY1	= V_WR_1;
-	V_WEY0	= V_WR_0;
+	V_WEY3	= V_WEM or V_EN3;
+	V_WEY2	= V_WEM2 or V_EN2;
+	V_WEY1	= V_WEM or V_EN1;
+	V_WEY0	= V_WEM or V_EN0;
 
 	V_WR[]	= V_WR_[];
 	V_WEN[]	= V_WEY[];

@@ -92,8 +92,8 @@ VARIABLE
 	AY_CH_LX[10..0]	: DFFE;
 	AY_CH_RX[10..0]	: DFFE;
 
-	AY_CH_L[9..0]	: DFF;
-	AY_CH_R[9..0]	: DFF;
+--	AY_CH_L[9..0]	: DFF;
+--	AY_CH_R[9..0]	: DFF;
 
 	AY_CH_DIR[7..0]	: DFFE;
 
@@ -359,8 +359,8 @@ BEGIN
 
 	AY_CH_VAL	= DFF((AY_CCC[7..2] == B"111100"),CLK42,,);
 
-	AY_CH_L[].clk = AY_CH_VAL;
-	AY_CH_R[].clk = AY_CH_VAL;
+--	AY_CH_L[].clk = AY_CH_VAL;
+--	AY_CH_R[].clk = AY_CH_VAL;
 	AY_CH_L[] = AY_CH_LX[10..1];
 	AY_CH_R[] = AY_CH_RX[10..1];
 
