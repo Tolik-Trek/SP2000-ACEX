@@ -21,7 +21,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_300
+SUBDESIGN BASE_303
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -182,7 +182,7 @@ VARIABLE
 	HDDR[7..0]	: DFFE;
 
 	GLISSER		: NODE;
-	BLK_MR		: NODE;
+	BLK_MR		: DFF;
 	VIDEO_PG	: NODE;
 
 	AUDIO_CH	: NODE;
@@ -272,6 +272,8 @@ VARIABLE
 	CASX_[3..0]	: NODE;
 	CASXE[1..0]	: NODE;
 	CAS_A		: NODE;
+	CAS_WRITE_HOLD : NODE;
+	DRAM_WRITE : NODE;
 
 --	ISA_CELL[1..0]	: LCELL;
 
@@ -288,13 +290,14 @@ VARIABLE
 
 	ISA_PORT[7..0]	: DFFE;
 
-BEGIN
+	CAS_REQUEST : NODE;
 
+BEGIN
 	CLK42		= TG42;
 
 --	/RESET	= TRI(GND,!DFF((KEYS.kb_reset & START_UP & SOFT_RESET),CLK42,,));
 	-- start_up from SOFT_RESET
-	/RESET	= TRI(GND,!DFF((KEYS.kb_reset & SOFT_RESET),CLK42,,));
+	/RESET	= TRI(GND,!DFF(((KEYS.kb_reset or !ALL_MODE5) & SOFT_RESET),CLK42,,));
 
 --	SOFT_RES[].prn	= DFF((!DECODE.BLK_R or /WR or !(DECODE.PAGE[7..0] == H"A0")),CLK42,,);
 
@@ -318,7 +321,8 @@ BEGIN
 --	===== keyboard =========================
 
 	KEYS.int_ena	= ALL_MODE0;	-- int in all keys
-	KEYS.ena		= !ALL_MODE0;	-- ZX-Keyboard
+-- Author early alternative: KEYS.ena = !ALL_MODE0;
+	KEYS.ena		= ALL_MODE1;	-- ZX-Keyboard
 
 	KEYS.clk42	= CLK42;
 	KEYS.clk_k	= DFF(CTH5,CLK42,,);
@@ -729,11 +733,13 @@ END GENERATE;
 --	(NMI_X,KBD_CX)	= GND;
 	(KBD_CX)	= GND;
 
-	IF (NMI_ON == "ON") GENERATE
-		NMI_X		= (!KEYS.kb_f12 & KEYS.kb_alt);
-	ELSE GENERATE
-		NMI_X		= GND;
-	END GENERATE;
+-- Author alternative retained for lineage:
+-- 	IF (NMI_ON == "ON") GENERATE
+-- 		NMI_X		= (!KEYS.kb_f12 & KEYS.kb_alt);
+-- 	ELSE GENERATE
+-- 		NMI_X		= GND;
+-- 	END GENERATE;
+	NMI_X = !ALL_MODE4 & KEYS.kb_alt & !KEYS.kb_f12;
 
 --	TFF(KEYS.kb_ctrl,KEYS.kb_f12,,);
 
@@ -857,7 +863,9 @@ END GENERATE;
 
 	DOUBLE_CAS	= ACC.DOUBLE_CAS;
 
-	CAS_A	= LCELL(DECODE.CAS);
+	CAS_WRITE_HOLD = DFF(!DECODE.MC_WRITE & DECODE.CAS,CLK42,,);
+	CAS_REQUEST = LCELL(DECODE.CAS or CAS_WRITE_HOLD);
+	CAS_A = LCELL(CAS_REQUEST);
 --	CAS_A	= (DECODE.CAS);
 
 	CASXE0	= LCELL((MCA0 == 0) or ((MCA0 == 1) & DOUBLE_CAS));
@@ -870,8 +878,11 @@ END GENERATE;
 
 	CAS_[]	= CASX_[];
 
---	/WE		= DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,);
-	/WE		= DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,);
+--	/WE		= DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,);-- Author alternative retained for lineage:
+-- 
+-- 	/WE		= DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,);
+	DRAM_WRITE = DFF(!/WE_OUT & !DECODE.CAS,!CLK42,(!/WE_OUT & !DECODE.RAS),);
+	/WE = !DRAM_WRITE;
 
 --	/WE		= LCELL(DFFE((/WE_OUT or DECODE.RAS),CLK42,,/RESET,));
 --	/WE		= LCELL(/WE_OUT or CAS_A);
@@ -965,8 +976,11 @@ END GENERATE;
 --	=====================================================
 
 	VIDEO_PG	= LCELL(DECODE.PAGE[7..4] == B"0101");
-	BLK_MR		= LCELL((VIDEO_PG &
-					(DECODE.PAGE2 or (DECODE.PAGE3 & ACC.GLISSER))));
+-- Author early combination, retained for lineage:
+-- 	BLK_MR		= LCELL((VIDEO_PG &
+-- 					(DECODE.PAGE2 or (DECODE.PAGE3 & ACC.GLISSER))));
+	BLK_MR.clk = CLK42;
+	BLK_MR.d = VIDEO_PG & (DECODE.PAGE2 or (DECODE.PAGE3 & ACC.GLISSER));
 
 	GLISSER		= LCELL(ACC.GLISSER & DECODE.PAGE[3] & VIDEO_PG);
 
@@ -1007,7 +1021,9 @@ END GENERATE;
 --	ZX_COLOR[3..0]
 
 	SVIDEO.ZX_PORT[5..0]	= (ACC.G_LINE[5..0]);
-	SVIDEO.ZX_PORT[7..6]	= (DECODE.SP_SA,LCELL(DECODE.SP_SCR & !(A13 & !ACC.G_LINE7) & !ACC.G_LINE6));
+-- Author early variant retained:
+-- 	SVIDEO.ZX_PORT[7..6]	= (DECODE.SP_SA,LCELL(DECODE.SP_SCR & !(A13 & !ACC.G_LINE7) & !ACC.G_LINE6));
+	SVIDEO.ZX_PORT[7..6]	= (DECODE.SP_SA,LCELL(DECODE.SP_SCR & !(A13 & !ACC.G_LINE7) & !ACC.G_LINE6 & !ALL_MODE0));
 
 	SVIDEO.DIR_PORT[0]		= DECODE.SCR128;
 

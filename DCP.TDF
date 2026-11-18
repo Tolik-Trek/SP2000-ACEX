@@ -217,8 +217,9 @@ VARIABLE
 
 	SYS_ENA		: NODE;
 
-BEGIN
+	RAS_PHASE_ENA, CAS_PHASE_ENA : NODE;
 
+BEGIN
 %
 	DC.CLK42	= CLK42;
 	DC./RESET	= /RESET;
@@ -466,8 +467,12 @@ CAS		\__/  | \__/|\__/
 --	RFC.d		= !MC_RQ;
 	RFC.ena		= CT1 & CT2;
 
-	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE))) & (!MC_TYPE or !RFC);
-	CAS.ena		= (!(CT1 or (CT0 xor !MC_TYPE))) & (!MC_TYPE or !RFC);
+-- Author combined form: 	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE))) & (!MC_TYPE or !RFC);
+	RAS_PHASE_ENA = LCELL(!(CT1 or (CT0 xor MC_TYPE)));
+	RAS.ena = LCELL(RAS_PHASE_ENA & (!MC_TYPE or !RFC));
+-- Author combined form: 	CAS.ena		= (!(CT1 or (CT0 xor !MC_TYPE))) & (!MC_TYPE or !RFC);
+	CAS_PHASE_ENA = LCELL(!(CT1 or (CT0 xor !MC_TYPE)));
+	CAS.ena = LCELL(CAS_PHASE_ENA & (!MC_TYPE or !RFC));
 --	RAS.ena		= (!(CT1 or (CT0 xor MC_TYPE)));
 --	CAS.ena		= (!(CT1 or (CT0 xor !MC_TYPE)));
 

@@ -458,7 +458,9 @@ IF MODE == "SPRINTER" GENERATE
 	V_CSX3	= LCELL(V_CSX2);
 
 --	V_CS0	= V_CSX3;
-	V_CS0	= GND;
+-- Author alternative retained for lineage:
+-- 	V_CS0	= GND;
+	V_CS0 = DFF(!VCM0 & VCM1,CLK42,V_CSX1,);
 
 --	=====================
 
