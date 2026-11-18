@@ -1,0 +1,18 @@
+FUNCTION kbd (
+	/IO,
+	A[15..0],
+	/RF,
+	TG42,
+	KBD_CC,
+	KBD_DD,
+	KB_CLOCK_DIV_D,
+	ALL_MODE0_N
+) RETURNS (
+	KB_CTRL,
+	KB_SHIFT,
+	KB_MA[2..0],
+	KB_RESET_REQUEST,
+	KB_F12_N,
+	KB_IRQ_N,
+	KB_PRESSED[5..0]
+);

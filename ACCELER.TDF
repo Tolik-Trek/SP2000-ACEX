@@ -1,0 +1,784 @@
+-- Early accelerator: address and count register banks, load/increment multiplexers, data mux and dual-port transfer RAM.
+-- Named control/data banks and preserved physical helpers; independent source review pending.
+INCLUDE "lpm_ram_dp";
+INCLUDE "lpm_ram_dq";
+SUBDESIGN acceler
+(
+	/RD : INPUT;
+	/WR : INPUT;
+	/IO : INPUT;
+	D[7..0] : INPUT;
+	A[15..0] : INPUT;
+	/RF : INPUT;
+	/M1 : INPUT;
+	/RESET : INPUT;
+	MD[15..0] : INPUT;
+	/MR : INPUT;
+	TG42 : INPUT;
+	CT[5..0] : INPUT;
+	DCPP[7..0] : INPUT;
+	PAGE[15..0] : INPUT;
+	RETI_CODE_4D : INPUT;
+	ED_CODE_HI : INPUT;
+	IO_WINDOW : INPUT;
+	CT_5_ENA : INPUT;
+	CT_6_ENA : INPUT;
+	CAS : INPUT;
+	MC_TYPE : INPUT;
+	MC_VIDEO_SELECT : INPUT;
+	DRAM_WRITE_D : INPUT;
+	DRAM_RW_MASK : INPUT;
+	MC_END : INPUT;
+	MC_BEGIN : INPUT;
+	PORT_MD_HIGH : INPUT;
+	VRAM_DATA_ENA : INPUT;
+	CLK_Z80 : INPUT;
+	MEMORY_LOW_WINDOW_N : INPUT;
+	ACC_PORT_WRITE_N : INPUT;
+	IO_READ_CLK : INPUT;
+	HDDR_ENA : INPUT;
+	PORT_MD[7..0] : INPUT;
+	ALL_MODE0_N : INPUT;
+	HDD_FLIP : INPUT;
+	HDD_DATA : INPUT;
+	PORT_44_4C_C4_CC : INPUT;
+	GRAF_X : INPUT;
+	G_LINE[7..0] : OUTPUT;
+	AA[15..0] : OUTPUT;
+	G_LINE_NEXT[7..0] : OUTPUT;
+	AA_NEXT[15..0] : OUTPUT;
+	MD_OUT[15..0] : OUTPUT;
+	ACC_CYCLE_END : OUTPUT;
+	ACC_WORD_STEP : OUTPUT;
+	ACC_DISABLED : OUTPUT;
+	START_ACC : OUTPUT;
+	HDDR[7..0] : OUTPUT;
+	ACC_DRIVE[7..0] : OUTPUT;
+	DOUBLE_CAS_N : OUTPUT;
+	IN_OUT_CMD : OUTPUT;
+	AA1_D : OUTPUT;
+	ACC_DRIVE_FF_D : OUTPUT;
+	MD_HIGH_FF_D : OUTPUT;
+)
+VARIABLE
+	G_LINE[7..0] : NODE;
+	AA[15..0] : NODE;
+	ACC_CNT[7..0] : NODE;
+	XCNT_L[1..0] : NODE;
+	XCNT_H[5..0] : NODE;
+	RGACC[7..0] : NODE;
+	RAM : lpm_ram_dp WITH (lpm_width=8,lpm_widthad=8);
+	RAM_Q[7..0] : NODE;
+	G_LINE_NEXT[7..0] : NODE;
+	AA_NEXT[15..0] : NODE;
+	ACC_CNT_NEXT[7..0] : NODE;
+	XCNT_NEXT[5..0] : NODE;
+	MD_OUT[15..0] : NODE;
+	ACC_MODE[2..0] : NODE;
+	ACC_MODE_CLRN : NODE;
+	ACC_MODE3 : NODE;
+	AAGR[9..0] : NODE;
+	XAGR[7..0] : NODE;
+	XADD_SUM1 : NODE;
+	XADD_CARRY2 : NODE;
+	XADD_XOR2 : NODE;
+	XADD_XOR3 : NODE;
+	XADD_CARRY3 : NODE;
+	XADD_NOR3 : NODE;
+	XADD_CARRY4_N : NODE;
+	XADD_XOR4 : NODE;
+	XADD_XOR5 : NODE;
+	XADD_CARRY5 : NODE;
+	XADD_NOR5 : NODE;
+	XADD_CARRY6_N : NODE;
+	XADD_XOR6 : NODE;
+	XADD_XOR7 : NODE;
+	XADD_CARRY7 : NODE;
+	XADD_NOR7 : NODE;
+	XADD_CARRY8_N : NODE;
+	XADD_SUM8 : NODE;
+	XADD_SUM9 : NODE;
+	XADD_NOR9 : NODE;
+	XADD_XOR9 : NODE;
+	XADD_CARRY10_N : NODE;
+	XCOUNT_ENA : NODE;
+	START_ACC_D : NODE;
+	ACC_COUNT_RUN : NODE;
+	WR_C7 : NODE;
+	ALT_ACC : NODE;
+	IO_WINDOW_D1 : NODE;
+	ACC_RW_PHASE : NODE;
+	ACC_C : NODE;
+	ACC_GO_PRN : NODE;
+	ACC_C_D_N : NODE;
+	ACC_C_EDGE : NODE;
+	AGR_ENA : NODE;
+	ACC_END_N : NODE;
+	ACC_CYCLE_END : NODE;
+	ACC_LOAD_COUNT : NODE;
+	ACC_WORD_STEP : NODE;
+	ACC_HORIZONTAL : NODE;
+	ACC_COPY_LINE : NODE;
+	ACC_ODD_MODE : NODE;
+	ACC_DISABLED : NODE;
+	AA_ENA : NODE;
+	ACC_VERTICAL : NODE;
+	START_ACC : NODE;
+	ACC_BUS_MASK : NODE;
+	ACC_MODE3_D : NODE;
+	ACC_BLK_CLRN : NODE;
+	ACC_BLK_D : NODE;
+	ACC_BLK_N : NODE;
+	ACC_MODE3_CLRN : NODE;
+	RGACC_ENA : NODE;
+	M1_SAMPLE : NODE;
+	M1_SAMPLE_N : NODE;
+	ACC_MODE_WRITE : NODE;
+	ED_CMD : NODE;
+	RETI : NODE;
+	CB_CMD : NODE;
+	ID_CMD : NODE;
+	PRF_CMD : NODE;
+	PREFIX_OPCODE_MID : NODE;
+	CB_OPCODE_MASK : NODE;
+	PREFIX_OPCODE_HI : NODE;
+	PREFIX_OPCODE_LO : NODE;
+	ID_OPCODE_MASK : NODE;
+	PREFIX_OPCODE_PAIRS : NODE;
+	HDDR[7..0] : NODE;
+	HDD_READ[7..0] : NODE;
+	RAM_DI[7..0] : NODE;
+	RAM_ADR[7..0] : NODE;
+	ACC_DRIVE[7..0] : NODE;
+	RAM_WR : NODE;
+	ACC_CPU_DATA_SELECT : NODE;
+	ACC_HDD_SELECT : NODE;
+	WR_C4 : NODE;
+	DOUBLE_CAS_N : NODE;
+	IN_OUT_CMD : NODE;
+	IN_OUT_OPCODE : NODE;
+	AA1_D : NODE;
+	ACC_DRIVE_FF_D : NODE;
+	MD_HIGH_FF_D : NODE;
+	ACC_CNT1_ENA_TERM1 : NODE;
+	ACC_CNT_NEXT_ALIAS_TERM1 : NODE;
+	ACC_CNT7_ALIAS_TERM1 : NODE;
+
+	ACC_DRIVE7_D_TERM1 : NODE;
+	MD_OUT15_D_TERM1 : NODE;
+
+	ACC_DRIVE6_D_TERM1 : NODE;
+	MD_OUT14_D_TERM1 : NODE;
+	XCNT_NEXT_ALIAS_TERM1 : NODE;
+
+	ACC_DRIVE5_D_TERM1 : NODE;
+	MD_OUT13_D_TERM1 : NODE;
+
+	MD_OUT12_D_TERM1 : NODE;
+	AA0_ALIAS_TERM1 : NODE;
+
+	MD_OUT11_D_TERM1 : NODE;
+	MD_OUT11_D_TERM2 : NODE;
+	ACC_DRIVE_FF_D_D_TERM1 : NODE;
+
+	MD_OUT8_D_TERM1 : NODE;
+	MD_HIGH_FF_D_D_TERM1 : NODE;
+
+	ACC_DRIVE2_D_TERM1 : NODE;
+	MD_OUT10_D_TERM1 : NODE;
+	MD_OUT9_D_TERM1 : NODE;
+	MD_OUT8_D_TERM2 : NODE;
+	ACC_END_N_D_TERM1 : NODE;
+	ACC_DRIVE4_D_TERM1 : NODE;
+	MD_OUT9_D_TERM2 : NODE;
+
+	-- Explicit instances preserve FF source names across module ports.
+	AA_R[15..0] : DFFE;
+	AA1_D_R : DFFE;
+	AAGR_R[9..0] : DFFE;
+	ACC_BLK_D_R : DFFE;
+	ACC_BLK_N_R : DFFE;
+	ACC_C_R : DFFE;
+	ACC_CNT_R[7..0] : DFFE;
+	ACC_C_D_N_R : DFFE;
+	ACC_DRIVE_R[7..0] : DFFE;
+	ACC_DRIVE_FF_D_R : DFFE;
+	ACC_END_N_R : DFFE;
+	ACC_MODE_R[2..0] : DFFE;
+	ACC_MODE3_R : DFFE;
+	ACC_MODE3_D_R : DFFE;
+	ACC_MODE_WRITE_R : DFFE;
+	ACC_RW_PHASE_R : DFFE;
+	ALT_ACC_R : DFFE;
+	CB_CMD_R : DFFE;
+	ED_CMD_R : DFFE;
+	G_LINE_R[7..0] : DFFE;
+	HDDR_R[7..0] : DFFE;
+	HDD_READ_R[7..0] : DFFE;
+	ID_CMD_R : DFFE;
+	IN_OUT_CMD_R : DFFE;
+	IO_WINDOW_D1_R : DFFE;
+	M1_SAMPLE_R : DFFE;
+	MD_HIGH_FF_D_R : DFFE;
+	MD_OUT_R[15..8] : DFFE;
+	PRF_CMD_R : DFFE;
+	RAM_DI_R[7..0] : DFFE;
+	RAM_WR_R : DFFE;
+	RETI_R : DFFE;
+	RGACC_R[7..0] : DFFE;
+	RGACC_ENA_R : DFFE;
+	START_ACC_D_R : DFFE;
+	WR_C4_R : DFFE;
+	WR_C7_R : DFFE;
+	XAGR_R[7..0] : DFFE;
+	XCNT_H_R[5..0] : DFFE;
+	XCNT_L_R[1..0] : DFFE;
+
+	XAGR_SUM[7..0], XAGR_CARRY_IN[7..0], XAGR_PAIR_XOR[7..0] : NODE;
+
+BEGIN
+
+    -- Shared physical carry/decoder prefixes of the bank contracts below.
+    -- All equations are parallel; LCELL/CASCADE/CARRY topology is retained.
+    XADD_CARRY4_N = LCELL(((!AAGR[2] & !XAGR[2]) or (!AAGR[2] & !XADD_CARRY2) or (!XAGR[2] & !XADD_CARRY2) or XADD_NOR3) & CASCADE(!XAGR[3] or !AAGR[3]));
+    XADD_XOR3 = LCELL((!XAGR[3] & AAGR[3]) or (XAGR[3] & !AAGR[3]));
+    XADD_CARRY3 = LCELL((AAGR[2] & XAGR[2]) or (AAGR[2] & XADD_CARRY2) or (XADD_CARRY2 & XAGR[2]));
+    XADD_NOR3 = LCELL(!XAGR[3] & !AAGR[3]);
+    XADD_SUM1 = LCELL((AAGR[1] & !XAGR[1] & !XAGR[0]) or (!AAGR[1] & XAGR[1] & !XAGR[0]) or (!AAGR[1] & !XAGR[1] & AAGR[0] & XAGR[0]) or (AAGR[1] & XAGR[1] & AAGR[0] & XAGR[0]) or (AAGR[1] & !XAGR[1] & !AAGR[0]) or (!AAGR[1] & XAGR[1] & !AAGR[0]));
+    XADD_CARRY2 = LCELL((AAGR[1] & XAGR[1]) or (AAGR[1] & AAGR[0] & XAGR[0]) or (XAGR[1] & AAGR[0] & XAGR[0]));
+    XADD_XOR2 = LCELL((!XAGR[2] & AAGR[2]) or (XAGR[2] & !AAGR[2]));
+    XADD_CARRY8_N = LCELL(((!XAGR[6] & !AAGR[6]) or (!AAGR[6] & XADD_CARRY6_N) or (!XAGR[6] & XADD_CARRY6_N) or XADD_NOR7) & CASCADE(!XAGR[7] or !AAGR[7]));
+    XADD_XOR7 = LCELL((!XAGR[7] & AAGR[7]) or (XAGR[7] & !AAGR[7]));
+    XADD_CARRY7 = LCELL((AAGR[6] & XAGR[6]) or (AAGR[6] & !XADD_CARRY6_N) or (!XADD_CARRY6_N & XAGR[6]));
+    XADD_XOR6 = LCELL((!XAGR[6] & AAGR[6]) or (XAGR[6] & !AAGR[6]));
+    XADD_NOR7 = LCELL(!XAGR[7] & !AAGR[7]);
+    XADD_XOR5 = LCELL((!XAGR[5] & AAGR[5]) or (XAGR[5] & !AAGR[5]));
+    XADD_CARRY6_N = LCELL(((!XAGR[4] & !AAGR[4]) or (!AAGR[4] & XADD_CARRY4_N) or (!XAGR[4] & XADD_CARRY4_N) or XADD_NOR5) & CASCADE(!XAGR[5] or !AAGR[5]));
+    XADD_CARRY5 = LCELL((AAGR[4] & XAGR[4]) or (AAGR[4] & !XADD_CARRY4_N) or (!XADD_CARRY4_N & XAGR[4]));
+    XADD_XOR4 = LCELL((!XAGR[4] & AAGR[4]) or (XAGR[4] & !AAGR[4]));
+    XADD_NOR5 = LCELL(!XAGR[5] & !AAGR[5]);
+    XADD_CARRY10_N = LCELL(((!AAGR[8] & !XCNT_L[0]) or (!AAGR[8] & XADD_CARRY8_N) or (!XCNT_L[0] & XADD_CARRY8_N) or XADD_NOR9) & CASCADE(!XCNT_L[1] or !AAGR[9]));
+    XADD_SUM8 = LCELL((!AAGR[8] & !XADD_CARRY8_N & !XCNT_L[0]) or (AAGR[8] & !XADD_CARRY8_N & XCNT_L[0]) or (AAGR[8] & XADD_CARRY8_N & !XCNT_L[0]) or (!AAGR[8] & XADD_CARRY8_N & XCNT_L[0]));
+    XADD_SUM9 = LCELL((XADD_XOR9 & !AAGR[8] & !XCNT_L[0]) or (!XADD_XOR9 & AAGR[8] & XCNT_L[0]) or (!XADD_XOR9 & AAGR[8] & !XADD_CARRY8_N) or (XADD_XOR9 & !AAGR[8] & XADD_CARRY8_N) or (!XADD_XOR9 & !XADD_CARRY8_N & XCNT_L[0]) or (XADD_XOR9 & XADD_CARRY8_N & !XCNT_L[0]));
+    XADD_NOR9 = LCELL(!XCNT_L[1] & !AAGR[9]);
+    XADD_XOR9 = LCELL((!XCNT_L[1] & AAGR[9]) or (XCNT_L[1] & !AAGR[9]));
+
+    -- Fractional address step: AAGR is the 10-bit captured increment;
+    -- XAGR holds the low8 fractional bits. Upper carry continues into XCNT.
+    -- START_ACC_D loads AAGR from (A9,A8,D7..0) and zeroes the fraction.
+    -- Existing shared carry LCELLs implement the same addition prefix tree.
+    -- OLD_AHDL/SP2000/ACCELER.TDF:223-234 defines this16-bit fixed-point sum.
+    XAGR_PAIR_XOR[] = (XADD_XOR7,XADD_XOR6,XADD_XOR5,XADD_XOR4,
+                        XADD_XOR3,XADD_XOR2,XADD_SUM1,(AAGR[0] xor XAGR[0]));
+    XAGR_CARRY_IN[] = (XADD_CARRY7,!XADD_CARRY6_N,XADD_CARRY5,
+                       !XADD_CARRY4_N,XADD_CARRY3,XADD_CARRY2,GND,GND);
+    XAGR_SUM[] = XAGR_PAIR_XOR[] xor XAGR_CARRY_IN[];
+    CASE START_ACC_D IS
+      WHEN 0 => AAGR_R[].d = AAGR[]; XAGR_R[].d = XAGR_SUM[];
+      WHEN 1 => AAGR_R[].d = (A[9..8],D[]); XAGR_R[].d = GND;
+    END CASE;
+
+	XCNT_L_R[].prn = VCC;
+
+	XCNT_L_R[].clrn = VCC;
+
+	XCNT_L_R[].ena = XCOUNT_ENA;
+
+	XCNT_L_R[].clk = TG42;
+
+	XCNT_H_R[].prn = VCC;
+
+	XCNT_H_R[].clrn = VCC;
+
+	XCNT_H_R[].ena = XCOUNT_ENA;
+
+	XCNT_H_R[].clk = TG42;
+
+	XAGR_R[].prn = VCC;
+
+	XAGR_R[].clrn = VCC;
+
+	XAGR_R[].ena = XCOUNT_ENA;
+
+	XAGR_R[].clk = TG42;
+
+	RGACC_R[].d = D[7..0];
+
+	RGACC_R[].prn = VCC;
+
+	RGACC_R[].clrn = VCC;
+
+	RGACC_R[].ena = RGACC_ENA;
+
+	RGACC_R[].clk = /MR;
+
+	RAM_DI_R[].prn = VCC;
+
+	RAM_DI_R[].clrn = VCC;
+
+	RAM_DI_R[].ena = VCC;
+
+	RAM_DI_R[].clk = !TG42;
+
+	MD_OUT_R[].prn = VCC;
+
+	MD_OUT_R[].clrn = VCC;
+
+	MD_OUT_R[].ena = VRAM_DATA_ENA;
+
+	MD_OUT_R[].clk = !TG42;
+
+	HDD_READ_R[].prn = VCC;
+
+	HDD_READ_R[].clrn = VCC;
+
+	HDD_READ_R[].ena = VCC;
+
+	HDD_READ_R[].clk = IO_READ_CLK;
+
+	HDDR_R[].prn = VCC;
+
+	HDDR_R[].clrn = VCC;
+
+	HDDR_R[].ena = HDDR_ENA;
+
+	HDDR_R[].clk = DRAM_RW_MASK;
+
+	G_LINE_R[].prn = VCC;
+
+	G_LINE_R[].clrn = /RESET;
+
+	G_LINE_R[].ena = AGR_ENA;
+
+	G_LINE_R[].clk = TG42;
+
+	ACC_MODE_R[].d = D[2..0];
+
+	ACC_MODE_R[].prn = VCC;
+
+	ACC_MODE_R[].clrn = ACC_MODE_CLRN;
+
+	ACC_MODE_R[].ena = ACC_MODE_WRITE;
+
+	ACC_MODE_R[].clk = /MR;
+
+	ACC_DRIVE_R[].prn = VCC;
+
+	ACC_DRIVE_R[].clrn = VCC;
+
+	ACC_DRIVE_R[].ena = VRAM_DATA_ENA;
+
+	ACC_DRIVE_R[].clk = !TG42;
+
+	ACC_CNT_R[].prn = VCC;
+
+	ACC_CNT_R[].clrn = VCC;
+
+	ACC_CNT_R[].ena = ACC_CNT1_ENA_TERM1;
+
+	ACC_CNT_R[].clk = TG42;
+
+	AAGR_R[].prn = VCC;
+
+	AAGR_R[].clrn = VCC;
+
+	AAGR_R[].ena = XCOUNT_ENA;
+
+	AAGR_R[].clk = TG42;
+
+	AA_R[].prn = VCC;
+
+	AA_R[].clrn = VCC;
+
+	AA_R[].ena = AA_ENA;
+
+	AA_R[].clk = TG42;
+
+	ACC_MODE_CLRN = LCELL(/RESET & !ALL_MODE0_N);
+	ACC_MODE3_R.d = VCC;
+	ACC_MODE3_R.clk = /MR;
+	ACC_MODE3_R.clrn = ACC_MODE3_CLRN;
+	ACC_MODE3_R.prn = VCC;
+	ACC_MODE3_R.ena = ACC_MODE_WRITE;
+	ACC_MODE3_D_R.d = ACC_MODE3;
+	ACC_MODE3_D_R.clk = CLK_Z80;
+	ACC_MODE3_D_R.clrn = VCC;
+	ACC_MODE3_D_R.prn = VCC;
+	ACC_MODE3_D_R.ena = VCC;
+	START_ACC = LCELL(!MC_TYPE or ACC_BUS_MASK or ACC_DISABLED);
+	ACC_BLK_CLRN = LCELL(/RESET & ACC_MODE3);
+	ACC_BLK_D_R.d = (RETI & ACC_BLK_N) # (/IO & !ACC_BLK_N);
+	ACC_BLK_D_R.clk = CLK_Z80;
+	ACC_BLK_D_R.clrn = VCC;
+	ACC_BLK_D_R.prn = VCC;
+	ACC_BLK_D_R.ena = VCC;
+	ACC_BLK_N_R.d = !ACC_BLK_D;
+	ACC_BLK_N_R.clk = /M1;
+	ACC_BLK_N_R.clrn = ACC_BLK_CLRN;
+	ACC_BLK_N_R.prn = VCC;
+	ACC_BLK_N_R.ena = VCC;
+	ACC_MODE3_CLRN = LCELL(/RESET & !ACC_MODE3_D);
+	ACC_BUS_MASK = LCELL(!/RF or !/M1 or ACC_BLK_N or /MR);
+	RGACC_ENA_R.d = /RF & ACC_LOAD_COUNT & /M1;
+	RGACC_ENA_R.clk = CLK_Z80;
+	RGACC_ENA_R.clrn = VCC;
+	RGACC_ENA_R.prn = VCC;
+	RGACC_ENA_R.ena = VCC;
+	ACC_LOAD_COUNT = LCELL(ACC_MODE[1] & !ACC_MODE[2] & !ACC_MODE[0]);
+	ACC_WORD_STEP = LCELL(!ACC_MODE[1] & ACC_MODE[2] & !ACC_MODE[0]);
+	ACC_HORIZONTAL = LCELL(ACC_MODE[0] & !ACC_MODE[1]);
+	ACC_COPY_LINE = LCELL(ACC_MODE[2] & ACC_MODE[0]);
+	ACC_ODD_MODE = LCELL(ACC_MODE[0]);
+	ACC_DISABLED = LCELL((!ACC_MODE[1] & !ACC_MODE[2] & !ACC_MODE[0]) or (ACC_MODE[1] & ACC_MODE[2] & !ACC_MODE[0]));
+	AA_ENA = LCELL((ACC_HORIZONTAL & !ACC_C & CAS) or START_ACC);
+	ACC_VERTICAL = LCELL(ACC_MODE[0] & ACC_MODE[1]);
+	WR_C4_R.d = /WR or !IO_WINDOW or !DCPP[7] or !PORT_44_4C_C4_CC;
+	WR_C4_R.clk = TG42;
+	WR_C4_R.clrn = VCC;
+	WR_C4_R.prn = VCC;
+	WR_C4_R.ena = VCC;
+
+	MD_OUT[0] = LCELL((!HDD_FLIP & ACC_DRIVE[0]) or (HDD_FLIP & MC_END & HDDR[0]) or (ACC_DRIVE[0] & !MC_END));
+
+	DOUBLE_CAS_N = LCELL(!ACC_WORD_STEP or START_ACC);
+	MD_OUT[3] = LCELL((!HDD_FLIP & ACC_DRIVE[3]) or (HDD_FLIP & MC_END & HDDR[3]) or (ACC_DRIVE[3] & !MC_END));
+	ED_CMD_R.d = D[7] & D[6] & ED_CODE_HI;
+	ED_CMD_R.clk = /MR;
+	ED_CMD_R.clrn = VCC;
+	ED_CMD_R.prn = VCC;
+	ED_CMD_R.ena = M1_SAMPLE_N;
+	ACC_MODE_WRITE_R.d = PREFIX_OPCODE_MID & !/M1 & !PRF_CMD & PREFIX_OPCODE_PAIRS;
+	ACC_MODE_WRITE_R.clk = CLK_Z80;
+	ACC_MODE_WRITE_R.clrn = VCC;
+	ACC_MODE_WRITE_R.prn = VCC;
+	ACC_MODE_WRITE_R.ena = VCC;
+	M1_SAMPLE_R.d = /M1;
+	M1_SAMPLE_R.clk = CLK_Z80;
+	M1_SAMPLE_R.clrn = VCC;
+	M1_SAMPLE_R.prn = VCC;
+	M1_SAMPLE_R.ena = VCC;
+	PREFIX_OPCODE_MID = LCELL((!D[7] & !D[5] & !D[2] & D[6]) or (!D[7] & D[5] & D[2] & D[6]));
+	M1_SAMPLE_N = LCELL(!M1_SAMPLE);
+	CB_OPCODE_MASK = LCELL(!D[3] & !D[6]);
+	RETI_R.d = RETI_CODE_4D & ED_CMD;
+	RETI_R.clk = /MR;
+	RETI_R.clrn = VCC;
+	RETI_R.prn = VCC;
+	RETI_R.ena = M1_SAMPLE_N;
+	CB_CMD_R.d = !PRF_CMD & CB_OPCODE_MASK & D[7];
+	CB_CMD_R.clk = /MR;
+	CB_CMD_R.clrn = VCC;
+	CB_CMD_R.prn = VCC;
+	CB_CMD_R.ena = M1_SAMPLE_N;
+	IN_OUT_OPCODE = LCELL((!PRF_CMD & D[7] & D[6] & !D[5]) & CASCADE(D[0] & D[4] & D[1] & !D[2]));
+	PREFIX_OPCODE_HI = LCELL((!D[5] & !D[4] & D[1] & !D[2]) or (D[5] & !D[1] & D[2]) or (D[4] & !D[1] & D[2]));
+	PREFIX_OPCODE_LO = LCELL(D[0] & D[3] & D[6]);
+	ID_OPCODE_MASK = LCELL(!D[4] & !D[6]);
+	ID_CMD_R.d = !PRF_CMD & ID_OPCODE_MASK & D[7];
+	ID_CMD_R.clk = /MR;
+	ID_CMD_R.clrn = VCC;
+	ID_CMD_R.prn = VCC;
+	ID_CMD_R.ena = M1_SAMPLE_N;
+	PREFIX_OPCODE_PAIRS = LCELL((!D[0] & !D[4] & !D[3] & !D[1]) or (!D[0] & D[4] & !D[3] & D[1]) or (D[0] & !D[4] & D[3] & !D[1]) or (D[0] & D[4] & D[3] & D[1]));
+	PRF_CMD_R.d = PREFIX_OPCODE_HI & D[7] & PREFIX_OPCODE_LO;
+	PRF_CMD_R.clk = /MR;
+	PRF_CMD_R.clrn = VCC;
+	PRF_CMD_R.prn = VCC;
+	PRF_CMD_R.ena = M1_SAMPLE_N;
+	IN_OUT_CMD_R.d = IN_OUT_OPCODE;
+	IN_OUT_CMD_R.clk = /MR;
+	IN_OUT_CMD_R.clrn = /IO;
+	IN_OUT_CMD_R.prn = VCC;
+	IN_OUT_CMD_R.ena = M1_SAMPLE_N;
+	AA1_D_R.d = AA[1];
+	AA1_D_R.clk = TG42;
+	AA1_D_R.clrn = VCC;
+	AA1_D_R.prn = VCC;
+	AA1_D_R.ena = CT_6_ENA;
+	ACC_COUNT_RUN = LCELL(!START_ACC_D);
+	XCNT_NEXT_ALIAS_TERM1 = XCNT_NEXT[0];
+	RAM_ADR[2] = LCELL((ALT_ACC & XCNT_H[0]) or (!ALT_ACC & ACC_CNT[2]));
+	ACC_DRIVE_FF_D_D_TERM1 = LCELL((ACC_DRIVE[2] & ACC_DRIVE[4] & ACC_DRIVE[3]) & CASCADE(ACC_DRIVE[1] & ACC_DRIVE[0]));
+	ACC_DRIVE_FF_D_R.d = ACC_DRIVE_FF_D_D_TERM1 & ACC_DRIVE[5] & ACC_DRIVE[6] & ACC_DRIVE[7];
+	ACC_DRIVE_FF_D_R.clk = TG42;
+	ACC_DRIVE_FF_D_R.clrn = VCC;
+	ACC_DRIVE_FF_D_R.prn = VCC;
+	ACC_DRIVE_FF_D_R.ena = VCC;
+	RAM_ADR[3] = LCELL((ALT_ACC & XCNT_H[1]) or (!ALT_ACC & ACC_CNT[3]));
+	RAM_ADR[4] = LCELL((ALT_ACC & XCNT_H[2]) or (!ALT_ACC & ACC_CNT[4]));
+	RAM_ADR[0] = LCELL((ALT_ACC & XCNT_L[0]) or (!ALT_ACC & ACC_CNT[0]));
+	RAM_ADR[6] = LCELL((ALT_ACC & XCNT_H[4]) or (!ALT_ACC & ACC_CNT[6]));
+	RAM_ADR[5] = LCELL((ALT_ACC & XCNT_H[3]) or (!ALT_ACC & ACC_CNT[5]));
+	ACC_END_N_D_TERM1 = LCELL((!ACC_CNT[6] & !ACC_CNT[4] & !ACC_CNT[5]) & CASCADE(!ACC_CNT[3] & !ACC_CNT[2] & !ACC_CNT[1] & ACC_CNT[0]));
+	RAM_ADR[1] = LCELL((ALT_ACC & XCNT_L[1]) or (!ALT_ACC & ACC_CNT[1]));
+	MD_OUT[7] = LCELL((!HDD_FLIP & ACC_DRIVE[7]) or (HDD_FLIP & MC_END & HDDR[7]) or (ACC_DRIVE[7] & !MC_END));
+	ACC_CPU_DATA_SELECT = LCELL(!ACC_COPY_LINE or !/IO);
+	ACC_DRIVE4_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[0]);
+	ACC_DRIVE_R[4].d = (ACC_CPU_DATA_SELECT & D[4]) or ACC_DRIVE4_D_TERM1;
+
+	MD_OUT9_D_TERM2 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[7]);
+	ACC_DRIVE_R[1].d = (ACC_CPU_DATA_SELECT & D[1]) or MD_OUT9_D_TERM2;
+
+	MD_OUT[4] = LCELL((ACC_DRIVE[4] & !HDD_FLIP) or (HDD_FLIP & MC_END & HDDR[4]) or (ACC_DRIVE[4] & !MC_END));
+	MD_OUT[6] = LCELL((!HDD_FLIP & ACC_DRIVE[6]) or (HDD_FLIP & MC_END & HDDR[6]) or (ACC_DRIVE[6] & !MC_END));
+	MD_OUT[5] = LCELL((!HDD_FLIP & ACC_DRIVE[5]) or (HDD_FLIP & MC_END & HDDR[5]) or (ACC_DRIVE[5] & !MC_END));
+
+	XCNT_L_R[1].d = (A[11] & START_ACC_D) # (XADD_SUM9 & !START_ACC_D);
+
+	XCNT_L_R[0].d = (A[10] & START_ACC_D) # (XADD_SUM8 & !START_ACC_D);
+
+	ACC_C_R.d = CAS & !START_ACC;
+	ACC_C_R.clk = TG42;
+	ACC_C_R.clrn = ACC_GO_PRN;
+	ACC_C_R.prn = VCC;
+	ACC_C_R.ena = CT[1];
+
+	ACC_GO_PRN = LCELL(!/MR & /M1);
+	ACC_RW_PHASE_R.d = (!/RD & CT[0]) or (!/WR & CT[1]);
+	ACC_RW_PHASE_R.clk = TG42;
+	ACC_RW_PHASE_R.clrn = VCC;
+	ACC_RW_PHASE_R.prn = VCC;
+	ACC_RW_PHASE_R.ena = VCC;
+	IO_WINDOW_D1_R.d = IO_WINDOW;
+	IO_WINDOW_D1_R.clk = TG42;
+	IO_WINDOW_D1_R.clrn = VCC;
+	IO_WINDOW_D1_R.prn = VCC;
+	IO_WINDOW_D1_R.ena = VCC;
+	RAM_WR_R.d = !/RD & CT[0] & ACC_C;
+	RAM_WR_R.clk = TG42;
+	RAM_WR_R.clrn = VCC;
+	RAM_WR_R.prn = VCC;
+	RAM_WR_R.ena = VCC;
+	WR_C7_R.d = /WR or ACC_PORT_WRITE_N or !IO_WINDOW or IO_WINDOW_D1;
+	WR_C7_R.clk = TG42;
+	WR_C7_R.clrn = VCC;
+	WR_C7_R.prn = VCC;
+	WR_C7_R.ena = VCC;
+	ALT_ACC_R.d = VCC;
+	ALT_ACC_R.clk = WR_C7;
+	ALT_ACC_R.clrn = /RESET;
+	ALT_ACC_R.prn = VCC;
+	ALT_ACC_R.ena = VCC;
+	XCOUNT_ENA = LCELL(!WR_C7 or (ACC_C & ACC_COPY_LINE & ACC_RW_PHASE));
+	ACC_CNT1_ENA_TERM1 = LCELL((ACC_RW_PHASE & ACC_C & ACC_ODD_MODE) or START_ACC);
+	ACC_CNT_NEXT_ALIAS_TERM1 = ACC_CNT_NEXT[1];
+	ACC_CNT7_ALIAS_TERM1 = LCELL((!ACC_CNT[7] & VCC) or (ACC_CNT[7] & GND));
+	START_ACC_D_R.d = START_ACC;
+	START_ACC_D_R.clk = TG42;
+	START_ACC_D_R.clrn = VCC;
+	START_ACC_D_R.prn = VCC;
+	START_ACC_D_R.ena = VCC;
+
+	RAM_ADR[7] = LCELL((!ALT_ACC & ACC_CNT[7]) or (ALT_ACC & XCNT_H[5]));
+	ACC_C_D_N_R.d = !ACC_C;
+	ACC_C_D_N_R.clk = TG42;
+	ACC_C_D_N_R.clrn = VCC;
+	ACC_C_D_N_R.prn = VCC;
+	ACC_C_D_N_R.ena = VCC;
+	ACC_C_EDGE = LCELL(ACC_C_D_N & ACC_C);
+	AGR_ENA = LCELL((ACC_C_D_N & ACC_C & ACC_VERTICAL) or !WR_C4);
+	ACC_END_N_R.d = (ACC_ODD_MODE & !ACC_END_N_D_TERM1) or (ACC_ODD_MODE & ACC_CNT[7]);
+	ACC_END_N_R.clk = TG42;
+	ACC_END_N_R.clrn = /M1;
+	ACC_END_N_R.prn = VCC;
+	ACC_END_N_R.ena = ACC_C_EDGE;
+	ACC_CYCLE_END = LCELL(!ACC_END_N & CT_5_ENA & !MC_VIDEO_SELECT & MC_BEGIN);
+	RAM_DI_R[5].d = (CB_CMD & !ID_CMD & RAM_Q[5]) or (!CB_CMD & ID_CMD & !PORT_MD[7] & RAM_Q[5]) or (!CB_CMD & PORT_MD[7] & !RAM_Q[5]) or (CB_CMD & PORT_MD[7] & RAM_Q[5]) or (!ID_CMD & PORT_MD[7]);
+
+	ACC_HDD_SELECT = LCELL(!ACC_COPY_LINE or !/IO);
+	ACC_DRIVE7_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[5]);
+	HDD_READ_R[7].d = MD[15];
+
+	MD_OUT15_D_TERM1 = LCELL((HDD_READ[7] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[7] & !ACC_WORD_STEP));
+	ACC_DRIVE_R[7].d = (ACC_CPU_DATA_SELECT & D[7]) or ACC_DRIVE7_D_TERM1;
+
+	MD_OUT_R[15].d = (!ACC_HDD_SELECT & RAM_Q[5]) or MD_OUT15_D_TERM1;
+
+	MD_OUT_R[14].d = (!ACC_HDD_SELECT & RAM_Q[1]) or MD_OUT14_D_TERM1;
+
+	ACC_DRIVE6_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[1]);
+	HDD_READ_R[6].d = MD[14];
+
+	RAM_DI_R[1].d = (CB_CMD & !ID_CMD & RAM_Q[1]) or (!PORT_MD[6] & !CB_CMD & ID_CMD & RAM_Q[1]) or (PORT_MD[6] & !CB_CMD & !RAM_Q[1]) or (PORT_MD[6] & CB_CMD & RAM_Q[1]) or (PORT_MD[6] & !ID_CMD);
+
+	MD_OUT14_D_TERM1 = LCELL((HDD_READ[6] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[6] & !ACC_WORD_STEP));
+	ACC_DRIVE_R[6].d = (ACC_CPU_DATA_SELECT & D[6]) or ACC_DRIVE6_D_TERM1;
+
+	HDDR_R[4].d = (MD[12] & DRAM_WRITE_D) # (D[4] & !DRAM_WRITE_D);
+
+	HDDR_R[5].d = (MD[13] & DRAM_WRITE_D) # (D[5] & !DRAM_WRITE_D);
+
+	HDDR_R[1].d = (MD[9] & DRAM_WRITE_D) # (D[1] & !DRAM_WRITE_D);
+
+	HDDR_R[2].d = (MD[10] & DRAM_WRITE_D) # (D[2] & !DRAM_WRITE_D);
+
+	HDDR_R[6].d = (MD[14] & DRAM_WRITE_D) # (D[6] & !DRAM_WRITE_D);
+
+	HDDR_R[7].d = (MD[15] & DRAM_WRITE_D) # (D[7] & !DRAM_WRITE_D);
+
+	HDDR_R[0].d = (MD[8] & DRAM_WRITE_D) # (D[0] & !DRAM_WRITE_D);
+
+	HDDR_R[3].d = (MD[11] & DRAM_WRITE_D) # (D[3] & !DRAM_WRITE_D);
+
+	MD_OUT[2] = LCELL((!HDD_FLIP & ACC_DRIVE[2]) or (HDD_FLIP & MC_END & HDDR[2]) or (ACC_DRIVE[2] & !MC_END));
+	RAM_DI_R[4].d = (CB_CMD & !ID_CMD & RAM_Q[4]) or (!PORT_MD[5] & !CB_CMD & ID_CMD & RAM_Q[4]) or (PORT_MD[5] & !CB_CMD & !RAM_Q[4]) or (PORT_MD[5] & CB_CMD & RAM_Q[4]) or (PORT_MD[5] & !ID_CMD);
+
+	ACC_DRIVE5_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[4]);
+	MD_OUT_R[13].d = (!ACC_HDD_SELECT & RAM_Q[4]) or MD_OUT13_D_TERM1;
+
+	ACC_DRIVE_R[5].d = (ACC_CPU_DATA_SELECT & D[5]) or ACC_DRIVE5_D_TERM1;
+
+	HDD_READ_R[5].d = MD[13];
+
+	MD_OUT13_D_TERM1 = LCELL((HDD_READ[5] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[5] & !ACC_WORD_STEP));
+
+	RAM_DI_R[0].d = (CB_CMD & !ID_CMD & RAM_Q[0]) or (!CB_CMD & ID_CMD & !PORT_MD[4] & RAM_Q[0]) or (!CB_CMD & PORT_MD[4] & !RAM_Q[0]) or (CB_CMD & PORT_MD[4] & RAM_Q[0]) or (!ID_CMD & PORT_MD[4]);
+
+	HDD_READ_R[4].d = MD[12];
+
+	MD_OUT_R[12].d = (!ACC_HDD_SELECT & RAM_Q[0]) or MD_OUT12_D_TERM1;
+
+	MD_OUT12_D_TERM1 = LCELL((HDD_READ[4] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[4] & !ACC_WORD_STEP));
+	MD_OUT[1] = LCELL((!HDD_FLIP & ACC_DRIVE[1]) or (HDD_FLIP & MC_END & HDDR[1]) or (ACC_DRIVE[1] & !MC_END));
+	AA0_ALIAS_TERM1 = LCELL((!AA[0] & AA[1] & !ACC_WORD_STEP) or (AA[0] & !AA[1]) or (!AA[1] & ACC_WORD_STEP));
+
+	MD_OUT_R[11].d = MD_OUT11_D_TERM2 or MD_OUT11_D_TERM1;
+
+	ACC_DRIVE_R[3].d = (ACC_CPU_DATA_SELECT & D[3]) or MD_OUT11_D_TERM1;
+
+	MD_OUT11_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[6]);
+	RAM_DI_R[6].d = (CB_CMD & !ID_CMD & RAM_Q[6]) or (!PORT_MD[3] & !CB_CMD & ID_CMD & RAM_Q[6]) or (PORT_MD[3] & !CB_CMD & !RAM_Q[6]) or (PORT_MD[3] & CB_CMD & RAM_Q[6]) or (PORT_MD[3] & !ID_CMD);
+
+	HDD_READ_R[3].d = MD[11];
+
+	MD_OUT11_D_TERM2 = LCELL((HDD_READ[3] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[3] & !ACC_WORD_STEP));
+	MD_HIGH_FF_D_R.d = MD_HIGH_FF_D_D_TERM1 & MD_OUT[13] & MD_OUT[14] & MD_OUT[15];
+	MD_HIGH_FF_D_R.clk = TG42;
+	MD_HIGH_FF_D_R.clrn = VCC;
+	MD_HIGH_FF_D_R.prn = VCC;
+	MD_HIGH_FF_D_R.ena = VCC;
+
+	RAM_DI_R[2].d = (CB_CMD & !ID_CMD & RAM_Q[2]) or (!PORT_MD[0] & !CB_CMD & ID_CMD & RAM_Q[2]) or (PORT_MD[0] & !CB_CMD & !RAM_Q[2]) or (PORT_MD[0] & CB_CMD & RAM_Q[2]) or (PORT_MD[0] & !ID_CMD);
+
+	RAM_DI_R[7].d = (CB_CMD & !ID_CMD & RAM_Q[7]) or (!PORT_MD[1] & !CB_CMD & ID_CMD & RAM_Q[7]) or (PORT_MD[1] & !CB_CMD & !RAM_Q[7]) or (PORT_MD[1] & CB_CMD & RAM_Q[7]) or (PORT_MD[1] & !ID_CMD);
+
+	MD_OUT8_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[2]);
+	MD_OUT_R[8].d = MD_OUT8_D_TERM2 or MD_OUT8_D_TERM1;
+
+	MD_HIGH_FF_D_D_TERM1 = LCELL((MD_OUT[10] & MD_OUT[12] & MD_OUT[11]) & CASCADE(MD_OUT[9] & MD_OUT[8]));
+	ACC_DRIVE_R[0].d = (ACC_CPU_DATA_SELECT & D[0]) or MD_OUT8_D_TERM1;
+
+	ACC_DRIVE_R[2].d = (ACC_CPU_DATA_SELECT & D[2]) or ACC_DRIVE2_D_TERM1;
+
+	MD_OUT_R[10].d = MD_OUT10_D_TERM1 or ACC_DRIVE2_D_TERM1;
+
+	RAM_DI_R[3].d = (CB_CMD & !ID_CMD & RAM_Q[3]) or (!PORT_MD[2] & !CB_CMD & ID_CMD & RAM_Q[3]) or (PORT_MD[2] & !CB_CMD & !RAM_Q[3]) or (PORT_MD[2] & CB_CMD & RAM_Q[3]) or (PORT_MD[2] & !ID_CMD);
+
+	ACC_DRIVE2_D_TERM1 = LCELL(/IO & ACC_COPY_LINE & RAM_Q[3]);
+	HDD_READ_R[0].d = MD[8];
+
+	HDD_READ_R[1].d = MD[9];
+
+	MD_OUT10_D_TERM1 = LCELL((HDD_READ[2] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[2] & !ACC_WORD_STEP));
+	MD_OUT_R[9].d = MD_OUT9_D_TERM1 or MD_OUT9_D_TERM2;
+
+	MD_OUT9_D_TERM1 = LCELL((HDD_READ[1] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[1] & !ACC_WORD_STEP));
+	MD_OUT8_D_TERM2 = LCELL((HDD_READ[0] & ACC_HDD_SELECT & ACC_WORD_STEP) or (ACC_HDD_SELECT & D[0] & !ACC_WORD_STEP));
+	HDD_READ_R[2].d = MD[10];
+
+	RAM.data[] = (RAM_DI[7], RAM_DI[6], RAM_DI[5], RAM_DI[4], RAM_DI[3], RAM_DI[2], RAM_DI[1], RAM_DI[0]);
+	RAM.wraddress[] = (RAM_ADR[7], RAM_ADR[6], RAM_ADR[5], RAM_ADR[4], RAM_ADR[3], RAM_ADR[2], RAM_ADR[1], RAM_ADR[0]);
+	RAM.rdaddress[] = (RAM_ADR[7], RAM_ADR[6], RAM_ADR[5], RAM_ADR[4], RAM_ADR[3], RAM_ADR[2], RAM_ADR[1], RAM_ADR[0]);
+	RAM.wren = RAM_WR;
+	RAM.wrclock = TG42;
+	RAM.wrclken = VCC;
+	RAM.rden = VCC;
+	RAM.rdclock = TG42;
+	RAM.rdclken = VCC;
+	RAM_Q[0] = RAM.q[0];
+	RAM_Q[1] = RAM.q[1];
+	RAM_Q[2] = RAM.q[2];
+	RAM_Q[3] = RAM.q[3];
+	RAM_Q[4] = RAM.q[4];
+	RAM_Q[5] = RAM.q[5];
+	RAM_Q[6] = RAM.q[6];
+	RAM_Q[7] = RAM.q[7];
+
+    G_LINE_NEXT[] = G_LINE[] + 1;
+
+	CASE ACC_COUNT_RUN IS
+			WHEN 1 =>
+				G_LINE_R[].d = G_LINE_NEXT[];
+			WHEN 0 =>
+				G_LINE_R[].d = D[];
+		END CASE;
+
+    AA_NEXT[] = AA[] + (B"00000000000000",ACC_WORD_STEP,!ACC_WORD_STEP);
+
+	CASE ACC_COUNT_RUN IS
+			WHEN 1 =>
+				AA_R[].d = AA_NEXT[];
+			WHEN 0 =>
+				AA_R[].d = A[];
+		END CASE;
+
+    ACC_CNT_NEXT[] = ACC_CNT[] - 1;
+
+	CASE ACC_COUNT_RUN IS
+			WHEN 1 =>
+				ACC_CNT_R[].d = ACC_CNT_NEXT[];
+			WHEN 0 =>
+				ACC_CNT_R[].d = RGACC[];
+		END CASE;
+
+    XCNT_NEXT[] = XCNT_H[] + (B"00000",!XADD_CARRY10_N);
+
+	CASE ACC_COUNT_RUN IS
+			WHEN 1 =>
+				XCNT_H_R[].d = XCNT_NEXT[];
+			WHEN 0 =>
+				XCNT_H_R[].d = (GND,GND,A[15..12]);
+		END CASE;
+
+	-- Combinational Q aliases: no extra FF, LCELL or delay.
+	AA[] = AA_R[].q;
+	AA1_D = AA1_D_R.q;
+	AAGR[] = AAGR_R[].q;
+	ACC_BLK_D = ACC_BLK_D_R.q;
+	ACC_BLK_N = ACC_BLK_N_R.q;
+	ACC_C = ACC_C_R.q;
+	ACC_CNT[] = ACC_CNT_R[].q;
+	ACC_C_D_N = ACC_C_D_N_R.q;
+	ACC_DRIVE[] = ACC_DRIVE_R[].q;
+	ACC_DRIVE_FF_D = ACC_DRIVE_FF_D_R.q;
+	ACC_END_N = ACC_END_N_R.q;
+	ACC_MODE[] = ACC_MODE_R[].q;
+	ACC_MODE3 = ACC_MODE3_R.q;
+	ACC_MODE3_D = ACC_MODE3_D_R.q;
+	ACC_MODE_WRITE = ACC_MODE_WRITE_R.q;
+	ACC_RW_PHASE = ACC_RW_PHASE_R.q;
+	ALT_ACC = ALT_ACC_R.q;
+	CB_CMD = CB_CMD_R.q;
+	ED_CMD = ED_CMD_R.q;
+	G_LINE[] = G_LINE_R[].q;
+	HDDR[] = HDDR_R[].q;
+	HDD_READ[] = HDD_READ_R[].q;
+	ID_CMD = ID_CMD_R.q;
+	IN_OUT_CMD = IN_OUT_CMD_R.q;
+	IO_WINDOW_D1 = IO_WINDOW_D1_R.q;
+	M1_SAMPLE = M1_SAMPLE_R.q;
+	MD_HIGH_FF_D = MD_HIGH_FF_D_R.q;
+	MD_OUT[15..8] = MD_OUT_R[].q;
+	PRF_CMD = PRF_CMD_R.q;
+	RAM_DI[] = RAM_DI_R[].q;
+	RAM_WR = RAM_WR_R.q;
+	RETI = RETI_R.q;
+	RGACC[] = RGACC_R[].q;
+	RGACC_ENA = RGACC_ENA_R.q;
+	START_ACC_D = START_ACC_D_R.q;
+	WR_C4 = WR_C4_R.q;
+	WR_C7 = WR_C7_R.q;
+	XAGR[] = XAGR_R[].q;
+	XCNT_H[] = XCNT_H_R[].q;
+	XCNT_L[] = XCNT_L_R[].q;
+END;
