@@ -21,7 +21,7 @@ INCLUDE "acceler";
 INCLUDE "ay";
 INCLUDE "mouse";
 
-SUBDESIGN BASE_303
+SUBDESIGN BASE_304
 	(
 	TG42		: INPUT;
 	CLKZ1		: OUTPUT;
@@ -65,7 +65,7 @@ SUBDESIGN BASE_303
 	XACS		: OUTPUT;	-- ROM_WE
 	XA[2..0]	: BIDIR;
 	XA3		: INPUT;
-	SXA			: OUTPUT;
+	SXA			: BIDIR;
 
 	RDXA		: OUTPUT;
 	WR_AWG		: OUTPUT;
@@ -95,6 +95,8 @@ VARIABLE
 	CTF[6..0]	: NODE;
 
 	CLK42		: NODE;
+	XA_START1, XA_START2, SXA_Q : NODE;
+	ISA_MATCH : NODE;
 
 	DD[7..0]	: NODE;
 	D_OUT		: NODE;
@@ -568,7 +570,9 @@ IF (UPDATE == 1) GENERATE
 								LCELL(DECODE.PAGE[7..4] == H"A")),CLK42,,),(/WR or /MR),/RESET,);
 
 	-- /SYS=0 - system ROM on
-	/SYS	= DFFE(!A6,/IOWR,/RESET,,SYS_ENA2);
+-- Author alternative retained for lineage:
+-- 	/SYS	= DFFE(!A6,/IOWR,/RESET,,SYS_ENA2);
+	/SYS = DFFE(!A6,CLK42,/RESET,,(!/IOWR & SYS_ENA2));
 
 	-- SYS_PG - system ROM0/ROM1 switch
 	SYS_PG	= DFFE(D0,/IOWR,/RESET,!ROM_RG4,(SYS_ENA2 & !D1));
@@ -583,7 +587,10 @@ IF (UPDATE == 1) GENERATE
 
 	-- 0 - CS_ISA
 
-	PRE_ISA		= LCELL(!LCELL(ISA_PORT[] == B"1101XXXX") or !DECODE.BLK_R or !A14 or !A15);
+-- Author alternative retained for lineage:
+-- 	PRE_ISA		= LCELL(!LCELL(ISA_PORT[] == B"1101XXXX") or !DECODE.BLK_R or !A14 or !A15);
+	ISA_MATCH = DFF((ISA_PORT[] == B"1101XXXX"),CLK42,,);
+	PRE_ISA = LCELL(!ISA_MATCH or !DECODE.BLK_R or !A14 or !A15);
 	PRE_ROM		= LCELL(/SYS or A14 or A15 or CASH_ON);
 	PRE_CASH	= LCELL(A14 or A15 or !CASH_ON);
 
@@ -766,7 +773,9 @@ END GENERATE;
 	RDXA		= DFF(!((CT[2..0] == B"11X") or (CT[2..0] == 0)),CLK42,,);
 
 --	T_RDXA		= CT2;
-	T_RDXA		= LCELL(RDXA);
+-- Author early delay cell; BASE304 clocks the receivers directly from RDXA:
+-- 	T_RDXA		= LCELL(RDXA);
+	T_RDXA = RDXA;
 
 --	WR_TM9		= DFF(CT2,!CLK42,,);
 	WR_TM9		= LCELL(CT2);
@@ -774,7 +783,13 @@ END GENERATE;
 
 --	SXA			= TFF(VCC,T_RDXA,,);
 --	SXA			= DFF((CT3 xor (CT2 & CT1)),CLK42,,);
-	SXA			= DFF((CT3 xor CT2),CLK42,,);
+-- Author alternative retained for lineage:
+-- 	SXA			= DFF((CT3 xor CT2),CLK42,,);
+	XA_START1 = DFF(VCC,XA2,,);
+	XA_START2 = DFF(XA_START1,XA2,,);
+	SXA_Q = DFF((CT3 xor CT2),CLK42,,);
+	SXA = TRI(SXA_Q,XA_START2);
+	SVIDEO.PHASE_READY = XA_START2;
 
 --	WR_AWG		= LCELL(LCELL(DECODE.WR_AWG));
 --	WR_AWG		= LCELL(DECODE.WR_AWG);
@@ -976,7 +991,7 @@ END GENERATE;
 --	=====================================================
 
 	VIDEO_PG	= LCELL(DECODE.PAGE[7..4] == B"0101");
--- Author early combination, retained for lineage:
+-- Author early combination retained:
 -- 	BLK_MR		= LCELL((VIDEO_PG &
 -- 					(DECODE.PAGE2 or (DECODE.PAGE3 & ACC.GLISSER))));
 	BLK_MR.clk = CLK42;
@@ -999,7 +1014,9 @@ END GENERATE;
 
 --	SVIDEO.wr		= (DECODE.MC_WRITE or DECODE.CAS or GLISSER);
 --	SVIDEO.wr		= DFF((DECODE.MC_WRITE or GLISSER or DECODE.RAS),CLK42,,/RESET);
-	SVIDEO.wr		= DFF((DECODE.MC_WRITE or GLISSER or DECODE.CAS),!CLK42,,/RESET);
+-- Author early registered path retained:
+-- 	SVIDEO.wr		= DFF((DECODE.MC_WRITE or GLISSER or DECODE.CAS),!CLK42,,/RESET);
+	SVIDEO.wr = DECODE.MC_WRITE or GLISSER or DECODE.CAS;
 
 --	SVIDEO.vai[]	= (DECODE.GA[],A[9..0]);
 	SVIDEO.vai[]	= (DECODE.GA[],ACC.AO[9..0]);

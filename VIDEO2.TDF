@@ -14,6 +14,7 @@ PARAMETERS
 SUBDESIGN video2
 	(
 	CLK42		: INPUT;
+	PHASE_READY : INPUT; -- BASE304 startup release, shared with SXA OE
 
 	CT[5..0]	: OUTPUT;
 	CTH[5..0]	: OUTPUT;
@@ -104,20 +105,27 @@ VARIABLE
 	INTTX		: NODE;
 
 	VLA[17..0]	: DFF;
-	VLA_NEXT[17..0]	: NODE;
-	VLA_MUX[10..0]	: LCELL;
-	VLA_HOLD[10..0]	: LCELL;
+	VLA_NEXT[17..0] : NODE;
+	VLA_MUX[10..0] : LCELL;
 --	SVA[17..0]	: NODE;
 	SVA[17..0]	: DFF;
 --	RSVA[8..0]	: LCELL;
 	RSVA[8..0]	: NODE;
 --	RSVA[8..0]	: DFF;
 
-	V_CST[1..0]	: DFF;
 	VCM[2..0]	: DFF;
 	TSN_W3		: DFF;
-	V_WE		: DFF;
-	V_WEX		: DFF;
+	V_WE		: NODE;
+	WRITE_SLOT	: DFF;
+	WRITE_REQUEST	: NODE;
+	WR_PIC_GUARD	: NODE;
+	MODE_ROW_READY : NODE;
+	COL_CAPTURE	: NODE;
+	VRAM_OE_PALETTE : NODE;
+	VRAM_OE_ADDR : NODE;
+	VRAM_OE_SCAN : NODE;
+	VRAM_OE_MODE : NODE;
+	VRAM_OE_STATE : DFF;
 
 	V_WEM		: NODE;
 	V_WEM2		: NODE;
@@ -128,7 +136,6 @@ VARIABLE
 	V_WEMMM		: NODE;
 	V_WEMMN		: NODE;
 	V_WEMMO		: NODE;
-	V_WET[3..0]	: DFF;
 
 	D_PIC0[7..0]	: DFFE;
 --	D_PIC0_[7..0]	: LCELL;
@@ -209,9 +216,8 @@ BEGIN
 
 	DEFAULTS
 		WR_MODE.d	= VCC; -- WR_MODE2.d	= VCC; -- WR_MODE2X.d	= VCC;
-		V_CST[].d	= VCC; V_WR[]		= VCC; TSN_W3.d		= VCC;
-		V_WE.d		= VCC; WR_COL.d		= VCC; WR_PIC.d		= VCC;
-		V_WET[].d	= VCC;
+		V_WR[] = VCC; TSN_W3.d = VCC;
+		WR_COL.d		= VCC; WR_PIC.d		= VCC;
 	END DEFAULTS;
 
 	ZX_COLOR[] = ZX_COL[];
@@ -285,6 +291,7 @@ BEGIN
 	CTV[8..0].clk	= CLK42;
 
 	CT[2..0].ena	= VCC;
+	CT[4..0].clrn = PHASE_READY;
 	CASE CT[2..0] IS
 		WHEN 0 => CT[2..0] = 1;
 		WHEN 1 => CT[2..0] = 2;
@@ -356,9 +363,10 @@ BEGIN
 
 	VCM[].clk	= CLK42;
 	TSN_W3.clk	= CLK42;
-	V_CST[].clk	= CLK42;
-	V_WE.clk	= CLK42;
-	V_WET[].clk	= CLK42;
+	WRITE_SLOT.clk = CLK42;
+	WRITE_SLOT.d = !VCM2 & !VCM0 & VCM1;
+	WRITE_REQUEST = LCELL(!MXWE & !VCM0 & WRITE_SLOT & VCM1);
+	WR_PIC_GUARD = LCELL(WRITE_SLOT or X_MODE5);
 	VLA[].clk	= CLK42;
 
 	SCR_ENA.clk	= CLK42;
@@ -390,33 +398,33 @@ IF MODE == "SPRINTER" GENERATE
 --	BLANK	= DFF((BORD & MODE03 & MODE02),WR_PIC,,);
 --	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),WR_PIC,,);
 
-	BORD	= DFF((MODE0[7..4] == 15),LWR_COL,,);
-	BLANK	= DFF(((BORD & MODE03 & MODE02) or DIR_PORT4),LWR_COL,,);
-	INTTX 	= DFF((BORD & MODE03 & MODE02 & MODE00),LWR_COL,,);
+	-- Synchronous form of the author's service registers in BASE 3.04.
+	COL_CAPTURE = LCELL(!WR_COL);
+	BORD = DFFE((MODE0[7..4] == 15),CLK42,,,COL_CAPTURE);
+	BLANK = DFFE(((BORD & MODE03 & MODE02) or DIR_PORT4),CLK42,,,COL_CAPTURE);
+	INTTX = DFFE((BORD & MODE03 & MODE02 & MODE00),CLK42,,,COL_CAPTURE);
+	MODE_ROW_READY = DFF(((MODE05 & !CT5) or !CT4),CLK42,,);
 
 	INTT	= DFF(!(INTTX & (CTV[2..0] == 7)),CT5,,);
 
 --	INTT	= DFF((INTTX or DFF(INTTX,CT5,,)),CT5,,);
 --	INTT	= DFF(!(BLANK & (CTV[2..0] == 7)),CLK42,,MODE0[0]);
 
-	CASE CT[2..0] IS
-		WHEN B"110" => VCM[2..0].d = 5; -- 101
-		WHEN B"000" => VCM[2..0].d = 1; -- 001
-		WHEN B"001" => VCM[2..0].d = 4; -- 100
-		WHEN B"010" => VCM[2..0].d = 3; -- 011
-		WHEN B"100" => VCM[2..0].d = 2; -- 010
-		WHEN B"101" => VCM[2..0].d = 0; -- 000
+	-- All 16 rows, including unused CT codes, come from the reverse CASE.
+	CASE (CT3,CT[2..0]) IS
+		WHEN B"X000" => VCM[].d = 1; -- picture
+		WHEN B"X001" => VCM[].d = 4; -- second palette phase
+		WHEN B"X01X", B"X100" => VCM[].d = 2; -- CPU/accelerator address
+		WHEN B"X101" => VCM[].d = 0; -- first palette phase
+		WHEN B"011X" => VCM[].d = 3; -- descriptor
+		WHEN B"111X" => VCM[].d = 5; -- second picture phase
 	END CASE;
 
 	CASE VCM[1..0] IS
 		WHEN 0 =>
 			VLA_NEXT[]	= (BRVA[7..0],VCC,VCC,VCC,VCC,VCC,RBRVA[10..8],GND,GND);
-			V_CST[].d = (VCC,GND);
-			V_WE.d		= VCC;
-			V_WEX.d		= VCC;
 			IF VCM2 THEN
---				TSN_W3.d  = X_MODE5;
-				TSN_W3.d  = X_MODE_BOND;
+				TSN_W3.d  = X_MODE5; -- enabled author alternative in BASE 3.04
 --				V_CST[].d = (VCC,X_MODE5);
 			ELSE
 				TSN_W3.d  = X_MODE_BOND;
@@ -426,43 +434,24 @@ IF MODE == "SPRINTER" GENERATE
 			WR_PIC.d	= !VCM2;
 			WR_COL.d	= VCM2;
 			VLA_NEXT[]		= SVA[];
-			V_CST[].d = (VCC,GND);
-			V_WE.d		= VCC;
-			V_WEX.d		= VCC;
 		WHEN 2 =>
+			WR_PIC.d = WR_PIC_GUARD;
 			VLA_NEXT[]		= VXA[17..0];
-			V_CST[].d 	= (!VXA18,VXA18) or MXWE;
-			V_WE.d		= MXWE;
-			V_WEX.d		= GND;
-			V_WET[].d	= MXWE or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
 		WHEN 3 =>
-			WR_PIC.d	= X_MODE5;
+			WR_PIC.d = GND;
 			VLA_NEXT[]		= (DIR_PORT3,CTH[5..0],CT5,VCC,VCC,CTV[8..3],GND,GND);
-			WR_MODE.d	= !(CT[5..3] == B"111") & !(CT4 & CT3 & !MODE0[5]);
-			V_CST[].d 	= (VCC,GND);
-			V_WE.d		= VCC;
-			V_WEX.d		= VCC;
+			WR_MODE.d = MODE_ROW_READY;
 	END CASE;
 
---	choose V-RAM komplect
-
-	V_CST1.prn	= GND;
---	V_CS0.clrn	= GND;
-	V_CST0.prn	= (LCELL(DFF(GND,!CLK42,,!V_CST0)));
-	V_CS1	= VCC;
---	V_CS0	= LCELL(V_CST0);
-
-	V_CSX0	= LCELL(!CLK42);
-	V_CSX1	= LCELL(V_CSX0);
-	V_CSX2	= LCELL(V_CSX1 & V_CSX0);
-	V_CSX3	= LCELL(V_CSX2);
-
---	V_CS0	= V_CSX3;
--- Author alternative retained for lineage:
--- 	V_CS0	= GND;
-	V_CS0 = DFF(!VCM0 & VCM1,CLK42,V_CSX1,);
-
---	=====================
+-- BASE 3.04 dynamically releases SRAM outputs during write/descriptor phases.
+	V_CS1 = VCC;
+	VRAM_OE_PALETTE = LCELL(!VCM2 or X_MODE5 or VCM1 or VCM0);
+	VRAM_OE_ADDR = LCELL(!VCM0 or VCM1);
+	VRAM_OE_SCAN = LCELL((VCM2 & (CT3 or CT4)) or VRAM_OE_ADDR);
+	VRAM_OE_MODE = LCELL(((VCM2 or VCM1) & (MODE_ROW_READY or !VCM0)) or (VCM0 & !VCM1));
+	VRAM_OE_STATE.clk = CLK42;
+	VRAM_OE_STATE.d = VRAM_OE_PALETTE & !WRITE_REQUEST & VRAM_OE_SCAN & VRAM_OE_MODE;
+	V_CS0 = LCELL(VRAM_OE_STATE);
 
 	SVA[].clk	= CLK42;
 	SVA[9..6]	= MODE0[3..0];
@@ -474,7 +463,7 @@ IF MODE == "SPRINTER" GENERATE
 	M_CTV[2..0]	= (!MODE2[2] & CTV[2..0]) or MODE2[2] & (MODE2[1],CTV[2..1]);
 	M_CT[5..3]	= (!MODE2[2] & (CT[5],!CT[4..3])) or MODE2[2] & (MODE2[0],!CT[5..4]);
 
-	CASE (!VCM2,MODE0[4]) IS
+	CASE (!VCM0,MODE0[4]) IS
 --	CASE (!VCM1,MODE0[4]) IS
 		WHEN B"X0" =>
 			--	Graf adress  --
@@ -512,8 +501,8 @@ IF MODE == "SPRINTER" GENERATE
 --	D_PIC2_[].clk	= !CLK42;
 --	D_PIC3_[].clk	= !CLK42;
 
---	PIC_CLK			= LCELL(LCELL(CLK42));
-	PIC_CLK			= !CLK42;
+	PIC_CLK			= LCELL(LCELL(CLK42));
+--	PIC_CLK			= !CLK42; -- older author epoch
 
 	D_PIC0_[].clk	= PIC_CLK;
 	D_PIC1_[].clk	= PIC_CLK;
@@ -532,6 +521,7 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN 3 => D_PICX_[] = D_PIC3_[];
 	END CASE;
 
+%
 	MODE0[].ena 	= VCC;
 	MODE1[].ena 	= VCC;
 	MODE2[].ena 	= VCC;
@@ -543,6 +533,7 @@ IF MODE == "SPRINTER" GENERATE
 	MODE2[].d		= VDM1[];
 	LWR_MODE		= LCELL(LCELL(WR_MODE));
 %
+-- Enabled synchronous descriptor alternative from OLD_AHDL.
 	MODE0[].ena 	= LWR_MODE;
 	MODE1[].ena 	= LWR_MODE;
 	MODE2[].ena 	= LWR_MODE;
@@ -553,18 +544,42 @@ IF MODE == "SPRINTER" GENERATE
 	MODE1[].d		= D_PIC2_[];
 	MODE2[].d		= D_PIC1_[];
 	LWR_MODE		= DFF(!WR_MODE,CLK42,,);
-%
-	X_MODE7	= DFF(MODE0[7],LWR_COL,,);
-	X_MODE6	= DFF(MODE0[6],LWR_COL,,);
-	X_MODE5	= DFF(MODE0[5],LWR_COL,,);
-	X_MODE4 = DFF(MODE0[4],LWR_COL,,);
+	X_MODE7 = DFFE(MODE0[7],CLK42,,,COL_CAPTURE);
+	X_MODE6 = DFFE(MODE0[6],CLK42,,,COL_CAPTURE);
+	X_MODE5 = DFFE(MODE0[5],CLK42,,,COL_CAPTURE);
+	X_MODE4 = DFFE(MODE0[4],CLK42,,,COL_CAPTURE);
 
-	-- Measured native mux cell and separate unity cell on VAO[15..8,2..0].
-	VLA_MUX[] = (VLA_NEXT[17..10],VLA_NEXT[4..2]);
-	VLA_HOLD[] = VLA_MUX[];
-	(VLA[17..10].d,VLA[4..2].d) = VLA_HOLD[];
-	VLA[9..5].d = VLA_NEXT[9..5];
-	VLA[1..0].d = VLA_NEXT[1..0];
+	-- Preserve the existing positive terminal mux at the IOC input.
+	-- One mux LCELL per selected bit; no additional HOLD/delay stage.
+	VLA_MUX[0] = VLA_NEXT[2];
+	VLA[2].d = VLA_MUX[0];
+	VLA_MUX[1] = VLA_NEXT[3];
+	VLA[3].d = VLA_MUX[1];
+	VLA_MUX[2] = VLA_NEXT[4];
+	VLA[4].d = VLA_MUX[2];
+	VLA_MUX[3] = VLA_NEXT[10];
+	VLA[10].d = VLA_MUX[3];
+	VLA_MUX[4] = VLA_NEXT[11];
+	VLA[11].d = VLA_MUX[4];
+	VLA_MUX[5] = VLA_NEXT[12];
+	VLA[12].d = VLA_MUX[5];
+	VLA_MUX[6] = VLA_NEXT[13];
+	VLA[13].d = VLA_MUX[6];
+	VLA_MUX[7] = VLA_NEXT[14];
+	VLA[14].d = VLA_MUX[7];
+	VLA_MUX[8] = VLA_NEXT[15];
+	VLA[15].d = VLA_MUX[8];
+	VLA_MUX[9] = VLA_NEXT[16];
+	VLA[16].d = VLA_MUX[9];
+	VLA_MUX[10] = VLA_NEXT[17];
+	VLA[17].d = VLA_MUX[10];
+	VLA[0].d = VLA_NEXT[0];
+	VLA[1].d = VLA_NEXT[1];
+	VLA[5].d = VLA_NEXT[5];
+	VLA[6].d = VLA_NEXT[6];
+	VLA[7].d = VLA_NEXT[7];
+	VLA[8].d = VLA_NEXT[8];
+	VLA[9].d = VLA_NEXT[9];
 
 	VAO[]	= VLA[17..2];
 
@@ -609,7 +624,7 @@ IF MODE == "SPRINTER" GENERATE
 	BRVA[].prn	= !MS_POINT2;
 
 --	CASE (LCELL(X_MODE4 or X_MODE5),CT2) IS
-	CASE (DFF((MODE0[4] or MODE0[5]),LWR_COL,,),CT2) IS
+	CASE (DFFE((MODE0[4] or MODE0[5]),CLK42,,,COL_CAPTURE),CT2) IS
 		WHEN B"1X" => BRVA[7..0] = DCOL[];
 		WHEN B"01" => BRVA[7..0] = (B"0000",DCOL[7..4]);
 		WHEN B"00" => BRVA[7..0] = (B"0000",DCOL[3..0]);
@@ -631,32 +646,16 @@ IF MODE == "SPRINTER" GENERATE
 		WHEN 2,3,6,5 => ZX_COL[] = (BRVA[6],BRVA[2..0]);
 	END CASE;
 
---	V_WET[].prn	= LCELL(DFF(GND,!CLK42,,!V_WE));
---	V_WE.prn	= LCELL(DFF(GND,!CLK42,,!V_WE));
+-- Positive pulse FF and falling-edge completion preserve both feedback stages.
+	V_WE_R = DFF(VCC,!CLK42,!V_WE,);
+	V_WE = !DFF(WRITE_REQUEST,CLK42,!V_WE_R,);
 
-	V_WE_R		= DFF(GND,!CLK42,,!V_WE);
-	V_WE.prn	= V_WE_R;
-	V_WET[].prn	= V_WE_R;
-
---	V_WR[]	= LCELL(V_WE) or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
-
---	V_WR[]	= (V_WE) or !(
-
-	V_WEX.clk	= CLK42;
---	V_WEX.d		= V_WE;
---	V_WEX.prn	= (DFF(GND,CLK42,,!V_WEX));
-
-
-	V_WEMMM	= LCELL(V_WE);
-	V_WEMMN	= LCELL(V_WEMMM);
-	V_WEMMO	= LCELL(V_WEMMN);
-	V_WEMM	= LCELL(V_WEMMO);
-
-	V_WRM	= LCELL(V_WEMMN & V_WEMMM);
-	V_WRM2	= LCELL(V_WEMMN & V_WEMMM);
-
-	V_WEM	= LCELL(V_WEMMM & V_WEMMO);
-	V_WEM2	= LCELL(V_WEMMM & V_WEMMO);
+	-- Separate existing buffers for SRAM /WE and FPGA TRI, including duplicates.
+	V_WEMMM = LCELL(V_WE or !WRITE_SLOT);
+	V_WRM = LCELL(V_WEMMM);
+	V_WRM2 = LCELL(V_WEMMM);
+	V_WEM = LCELL(V_WE & V_WEMMM);
+	V_WEM2 = LCELL(V_WE & V_WEMMM);
 
 	V_EN3	= DFF(!(!VXA1 & (!VXA0 or DOUBLE)),CLK42,F_WR,);
 	V_EN2	= DFF(!(!VXA1 & (VXA0 or DOUBLE)) ,CLK42,F_WR,);
