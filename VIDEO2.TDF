@@ -198,6 +198,7 @@ VARIABLE
 	V_WEY[3..0]	: LCELL;
 
 	V_WE_R		: NODE;
+	V_WE_PRESET_N : LCELL; -- existing early async-preset distribution boundary
 
 	V_CSX[3..0]	: NODE;
 
@@ -666,7 +667,8 @@ IF MODE == "SPRINTER" GENERATE
 --	V_WE.prn	= LCELL(DFF(GND,!CLK42,,!V_WE));
 
 	V_WE_R		= DFF(GND,!CLK42,,!V_WE);
-	V_WE.prn	= V_WE_R;
+	V_WE_PRESET_N = V_WE_R; -- author alternative LCELL(DFF(GND,!CLK42,,!V_WE))
+	V_WE.prn	= V_WE_PRESET_N;
 	V_WET[].prn	= V_WE_R;
 
 --	V_WR[]	= LCELL(V_WE) or !((!VXA1 & !VXA0),(!VXA1 & VXA0),(VXA1 & !VXA0),(VXA1 & VXA0));
